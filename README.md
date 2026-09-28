@@ -65,6 +65,11 @@ lets the window quietly drift out of the 30-day range.
 - Version tracking, pricing details, alternative suggestions
 - One-click **History** button per tool to open its 30-day evolution trail
 
+### 📲 Installable PWA — Desktop & Android, Zero Server
+- Installable from Chrome/Edge (desktop) and "Add to Home Screen" (Android) — no APK, no Electron
+- The app ships with a **bundled static snapshot** of the last 30 days; every screen (feed, heatmap, Find-a-Tool, Compare, evolution modals) works fully **offline**
+- Detects a live backend automatically: server up → live `/api/*`, no server → offline snapshot with an honest mode badge
+
 ---
 
 ## 🎨 Visually Stunning Design
@@ -85,6 +90,7 @@ lets the window quietly drift out of the 30-day range.
 | **AI Engine** | Google Gemini API (`google-genai`) |
 | **Data Pipeline** | Async RSS/Atom ingestion, token-overlap clustering |
 | **Frontend** | Vanilla JS, CSS animations, Canvas API |
+| **Installed App** | Installable PWA (manifest + service worker), bundled offline data snapshot |
 | **Data Models** | Pydantic v2 schemas |
 
 ---
@@ -98,6 +104,8 @@ TechIntel/
 │   ├── models.py            # Pydantic v2 data schemas
 │   ├── database.py          # SQLite layer, query helpers & curated seed events
 │   ├── seed_history.py      # Deterministic 30-day release-history generator
+│   ├── export_static.py     # Exports the seeded DB to frontend/data/*.json (PWA payload)
+│   ├── make_icons.py        # Pure-Python PNG icon generator (no Pillow)
 │   ├── test_api.py          # Automated test suite
 │   ├── pipeline/
 │   │   ├── clustering.py    # Deduplication & source tier classifier
@@ -105,10 +113,20 @@ TechIntel/
 │   │   └── ingestion.py     # Async RSS/GitHub feed sync
 │   └── services/
 │       └── matcher.py       # Purpose-based tool matcher & comparison
-└── frontend/
-    ├── index.html           # Main UI (4 tabs, heatmap, evolution modal)
-    ├── styles.css           # Theme system + glassmorphism
-    └── app.js               # Radar canvas, state machine, rendering
+├── frontend/
+│   ├── index.html           # Main UI (4 tabs, heatmap, evolution modal)
+│   ├── styles.css           # Theme system + glassmorphism
+│   ├── app.js               # Radar canvas, state machine, rendering
+│   ├── manifest.json        # PWA manifest (relative scope — works on subpaths)
+│   ├── sw.js                # Service worker: cache-first shell + offline nav
+│   ├── pwa/
+│   │   ├── api.js           # Data adapter: live /api/* ⇄ bundled offline snapshot
+│   │   └── matcher.js       # JS port of matcher.py (score-for-score parity)
+│   ├── data/                # Bundled offline snapshot (committed, regenerated)
+│   │   ├── events.json / tools.json / stats.json / timeline.json / build.json
+│   │   └── evolution/       # One timeline per tool
+│   └── icons/               # Any + maskable icons for install & splash
+└── check_*.py / check_*.js  # Parity + wiring verification suites
 ```
 
 ---
@@ -158,6 +176,78 @@ Open **http://127.0.0.1:8000** in your browser.
 
 ---
 
+## 📲 Installable PWA (Desktop & Android)
+
+The entire UI is a **progressive web app**: no Electron, no Tauri, no APK. The
+web version is hosted by FastAPI; the *installed* version replaces the server
+with a **bundled snapshot** of the seeded database that lives in
+`frontend/data/`. That snapshot is committed, so the installed app works even
+with the laptop off.
+
+### How it works
+
+- **One codebase, two data paths.** `frontend/pwa/api.js` probes
+  `/api/health` (1.5 s timeout) at boot:
+  - server answers → live mode, everything served by FastAPI (`/api/*`);
+  - otherwise → static mode, loads `data/*.json`, recomputes stats and date
+    windows in the browser, and runs Find-a-Tool / Compare through the
+    JavaScript matcher port.
+- **Offline-first when installed.** The service worker (`sw.js`) precaches the
+  app shell (versioned `techintel-shell-<ver>`, bumped on every shell change),
+  uses stale-while-revalidate for `data/`, and always goes straight to the
+  cache for navigation — so a cold launch while offline still renders.
+- **Real-time stats are honest offline.** "new today / week / month" are
+  recomputed from the snapshot against the *current* clock, and the header
+  shows an **Offline snapshot** badge with the bundle timestamp, so stale data
+  is always labeled as stale.
+
+### Install it
+
+| Platform | How |
+|----------|-----|
+| **Desktop (Chrome/Edge)** | Open the deployed app → the **Install** button in the header (or the address-bar install icon) → **Install** |
+| **Android (Chrome)** | Menu → **Add to Home Screen** (or "Install app") → add |
+| **iOS (Safari)** | Share → **Add to Home Screen** (standalone, masked icon included) |
+
+No Play Store distribution is configured (intentionally) — the app is
+installable from any HTTPS page serving `manifest.json` + `sw.js`.
+
+### If you host on GitHub Pages (optional)
+
+The frontend deploys as a plain static site too — every asset path is
+*relative* (`./`), the manifest `scope`/`start_url` are relative, and the
+service worker scope is `<repo>/`, so nothing needs rewriting for a
+subpath. `manifest.json` is used rather than `.webmanifest` because GitHub
+Pages does not map the latter to a JSON MIME type (Chrome rejects
+`application/octet-stream` manifests).
+
+### Rebuild the bundled snapshot
+
+Run this whenever the seeded data or API response shapes change, then commit
+`frontend/data/` so installs pick it up:
+
+```bash
+python -m backend.export_static   # writes frontend/data/*.json (~163 KB)
+python -m backend.make_icons      # regenerates frontend/icons/*.png (pure Python)
+```
+
+The export drives the real FastAPI app through its `TestClient`, so the JSON
+files are byte-identical to the live `/api/*` responses.
+
+### Verification suite
+
+```bash
+python -m backend.test_api          # backend + matcher, incl. JS parity asserts
+python check_icons.py               # PNG structure/size/content validation
+python check_matcher_parity.py      # JS matcher port ≡ Python matcher (104 cases)
+python check_data_parity.py         # static snapshot ≡ live API (all windows/endpoints)
+python check_pwa_wiring.py          # precache list, manifest, export integrity
+node check_ui_harness.js static     # real app.js boot, headless, no server
+node check_ui_harness.js live       # real app.js boot against a running server
+```
+
+---
+
 ## 📡 API Reference
 
 | Method | Endpoint | Description |
@@ -193,8 +283,8 @@ curl "http://127.0.0.1:8000/api/tools/python/evolution?days=30"
 
 ## 🗺️ Roadmap
 
+- [x] PWA — installable on desktop & Android (bundled offline snapshot)
 - [ ] Web deployment (Render.com / Railway)
-- [ ] PWA — installable on desktop & Android
 - [ ] User accounts & personalized tracking
 - [ ] Email/push alerts for tracked technologies
 - [ ] Expanded feed sources (Product Hunt, npm, PyPI release feeds)

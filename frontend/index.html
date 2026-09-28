@@ -2,9 +2,24 @@
 <html lang="en" data-theme="nebula">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TechIntel — Live Technology Intelligence & Tool Radar</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>TechIntel — Live Technology Intelligence &amp; Tool Radar</title>
+
+  <!-- PWA / installability -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#070a18">
+  <meta name="description" content="Track 30 days of verified technology releases, compare tools, and see how fast each project is actually moving.">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <!-- Standalone launch on iOS: without these it opens inside Safari's chrome. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TechIntel">
+
+  <!-- Relative paths so the app works from a subpath (e.g. GitHub Pages
+       /TharunKrishnaP/TechIntel) as well as from the FastAPI root. -->
+  <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -59,6 +74,20 @@
         <span class="chip-icon">⚡</span>
         <span class="chip-text">New (24h): <strong id="newCountBadge">+0</strong></span>
       </div>
+
+      <!-- Data-source badge: tells the user whether this install is reading a
+           live backend or a baked-in snapshot. Hidden when live. -->
+      <div class="mode-chip offline" id="modeChip" title="No server detected — showing the data snapshot bundled with this install." hidden>
+        <span class="chip-icon">📦</span>
+        <span class="chip-text">Offline snapshot</span>
+      </div>
+
+      <!-- Install button. Populated by app.js once the browser reports the app
+           is installable; hidden when already installed or unsupported. -->
+      <button class="btn-install" id="btnInstall" title="Install TechIntel for offline access" hidden>
+        <span class="install-icon">⬇</span>
+        <span class="install-text">Install</span>
+      </button>
 
       <button class="btn-refresh" id="btnRefreshFeed" title="Trigger real-time feed sync">
         <svg class="refresh-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
@@ -422,6 +451,10 @@
     </div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <!-- The adapter and matcher load before app.js: app.js boots through
+       API.init(), which decides live-backend vs static-snapshot data. -->
+  <script src="pwa/matcher.js"></script>
+  <script src="pwa/api.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

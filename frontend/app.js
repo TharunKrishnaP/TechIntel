@@ -15,6 +15,7 @@ const state = {
   dateFrom: '',
   dateTo: '',
   dayFocus: '', // Set when the user clicks a single heatmap bar.
+  installPrompt: null, // Captured from the browser's beforeinstallprompt event.
   events: [],
   technologies: [],
   timeline: null,
@@ -99,20 +100,104 @@ const elements = {
   versionTrail: document.getElementById('versionTrail'),
   evolutionBreakdown: document.getElementById('evolutionBreakdown'),
   evolutionTimeline: document.getElementById('evolutionTimeline'),
-  btnEvolutionClose: document.getElementById('btnEvolutionClose')
+  btnEvolutionClose: document.getElementById('btnEvolutionClose'),
+
+  // PWA
+  btnInstall: document.getElementById('btnInstall'),
+  modeChip: document.getElementById('modeChip')
 };
 
+// ---------------------------------------------------------------------------
+// PWA bootstrapping
+// ---------------------------------------------------------------------------
+
+/** Register the service worker that makes the app installable and offline-capable. */
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  // Service workers need a secure context. localhost counts, plain http on a LAN
+  // IP does not — skip silently rather than logging a confusing error.
+  if (!window.isSecureContext) {
+    console.info('Service worker skipped: not a secure context (needs https or localhost).');
+    return;
+  }
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(
+      (reg) => {
+        // Pick up a new deploy without a manual reload cycle.
+        reg.addEventListener('updatefound', () => {
+          const sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener('statechange', () => {
+            if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+              console.info('A new version of TechIntel is ready. Reload to apply.');
+            }
+          });
+        });
+      },
+      (err) => console.warn('Service worker registration failed:', err)
+    );
+  });
+}
+
+/** Surface the browser's install prompt as a button. */
+function setupInstallPrompt() {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    state.installPrompt = e;
+    if (elements.btnInstall) elements.btnInstall.hidden = false;
+  });
+
+  // If it's already installed, never show the button.
+  window.addEventListener('appinstalled', () => {
+    hideInstallButton();
+    localStorage.setItem('techintel_installed', '1');
+  });
+
+  if (localStorage.getItem('techintel_installed') === '1') hideInstallButton();
+  else if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    // Running standalone but we have no record (e.g. cleared storage).
+    hideInstallButton();
+  }
+}
+
+function hideInstallButton() {
+  if (elements.btnInstall) elements.btnInstall.hidden = true;
+}
+
+/** Tell the user whether they're looking at live data or the bundled snapshot. */
+function renderDataSourceChip() {
+  if (!elements.modeChip) return;
+  if (API.isLive) {
+    elements.modeChip.hidden = true;
+  } else {
+    const build = API.buildInfo;
+    elements.modeChip.hidden = false;
+    elements.modeChip.title = build && build.generated_at
+      ? `No server detected — showing the snapshot bundled at build time (${build.generated_at}).`
+      : 'No server detected — showing the bundled offline snapshot.';
+  }
+}
+
 // Initialize Application
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   initCyberRadarCanvas();
   applyTheme(state.theme);
   checkBannerStatus();
   setupEventListeners();
   applyTimeWindowToUI();
-  fetchStats();
-  fetchEvents();
-  fetchTechnologies();
-  fetchTimeline();
+  registerServiceWorker();
+  setupInstallPrompt();
+
+  // Decide the data source before any view renders, so a slow probe delays the
+  // first paint rather than flashing an empty feed and then filling it in.
+  try {
+    await API.init();
+  } catch (err) {
+    console.error('Data adapter failed to initialise:', err);
+  }
+  renderDataSourceChip();
+
+  await Promise.all([fetchStats(), fetchEvents(), fetchTechnologies(), fetchTimeline()]);
 });
 
 // Interactive 3D Cyber-Radar Canvas with Perspective Grid & Particles
@@ -406,12 +491,17 @@ function setupEventListeners() {
     if (state.activeTab === 'directory') renderDirectory();
   });
 
-  // Sync / Refresh Feed
+  // Sync / Refresh Feed — only meaningful when a backend is reachable. In static
+  // mode the adapter reports it as unsupported, so explain rather than fail silently.
   elements.btnRefreshFeed.addEventListener('click', async () => {
+    if (!API.refreshSupported) {
+      setFeedSummary('This install is running from a bundled snapshot, so there is no server to sync. Run the backend to pull live feeds.', true);
+      return;
+    }
     elements.btnRefreshFeed.classList.add('loading');
     elements.btnRefreshFeed.disabled = true;
     try {
-      await fetch('/api/refresh-feed', { method: 'POST' });
+      await API.refreshFeed();
       await fetchStats();
       await fetchEvents();
       await fetchTimeline();
@@ -422,6 +512,17 @@ function setupEventListeners() {
       elements.btnRefreshFeed.disabled = false;
     }
   });
+
+  // PWA install
+  if (elements.btnInstall) {
+    elements.btnInstall.addEventListener('click', async () => {
+      if (!state.installPrompt) return;
+      state.installPrompt.prompt();
+      const { outcome } = await state.installPrompt.userChoice;
+      if (outcome === 'accepted') hideInstallButton();
+      state.installPrompt = null;
+    });
+  }
 
   // Tool Finder Actions
   elements.btnFindTools.addEventListener('click', executeToolSearch);
@@ -495,12 +596,10 @@ function setAudienceMode(mode) {
   renderEvents();
 }
 
-// Fetch Stats from Backend
+// Fetch Stats (live backend, or recomputed from the bundled snapshot)
 async function fetchStats() {
   try {
-    const res = await fetch('/api/stats');
-    if (!res.ok) return;
-    const stats = await res.json();
+    const stats = await API.getStats();
     elements.statTotalEvents.textContent = stats.total_events;
     elements.statSecEvents.textContent = stats.critical_security_count;
     elements.statAiEvents.textContent = stats.ai_updates_count;
@@ -513,15 +612,15 @@ async function fetchStats() {
   }
 }
 
-// Build the query string for the currently selected time window
+// The active time window, in the shape the data adapter expects.
 function buildTimeWindowParams() {
-  const params = new URLSearchParams();
-  if (state.dateFrom) params.set('date_from', state.dateFrom);
-  if (state.dateTo) params.set('date_to', state.dateTo);
+  const w = {};
+  if (state.dateFrom) w.dateFrom = state.dateFrom;
+  if (state.dateTo) w.dateTo = state.dateTo;
   if (state.timeWindow && state.timeWindow !== 'all' && state.timeWindow !== 'custom' && !state.dateFrom && !state.dateTo) {
-    params.set('days', state.timeWindow);
+    w.days = Number(state.timeWindow);
   }
-  return params;
+  return w;
 }
 
 // Human-readable label for the active window, used in the summary line
@@ -544,20 +643,21 @@ function setFeedSummary(text, isWarning = false) {
   if (elements.summarySpinner) elements.summarySpinner.style.display = 'none';
 }
 
-// Fetch Events from Backend, honouring the active historical time window
+// Fetch Events (live backend or bundled snapshot), honouring the time window
 async function fetchEvents() {
   if (elements.summarySpinner) elements.summarySpinner.style.display = 'inline-block';
   setFeedSummary('Loading feed…');
   try {
-    const params = buildTimeWindowParams();
-    const qs = params.toString();
-    const res = await fetch(`/api/feed?limit=100${qs ? `&${qs}` : ''}`);
-    if (!res.ok) throw new Error('Feed request failed');
-    state.events = await res.json();
+    const events = await API.getFeed({ ...buildTimeWindowParams(), limit: 100 });
+    if (!Array.isArray(events)) throw new Error('Feed request failed');
+    state.events = events;
     renderEvents();
   } catch (err) {
     console.error("Error fetching events:", err);
-    elements.eventsContainer.innerHTML = `<div class="empty-state"><p>Could not load events feed. Is the backend running?</p></div>`;
+    const hint = API.isLive
+      ? 'Could not reach the backend.'
+      : 'Could not load the bundled data. Re-run <code>python -m backend.export_static</code>.';
+    elements.eventsContainer.innerHTML = `<div class="empty-state"><p>${hint}</p></div>`;
     setFeedSummary('Failed to load the feed.', true);
   }
 }
@@ -565,9 +665,9 @@ async function fetchEvents() {
 // Fetch the 30-day activity heatmap series
 async function fetchTimeline() {
   try {
-    const res = await fetch('/api/timeline?days=30');
-    if (!res.ok) return;
-    state.timeline = await res.json();
+    const tl = await API.getTimeline(30);
+    if (!tl) return;
+    state.timeline = tl;
     renderHeatmap();
   } catch (err) {
     console.error("Error fetching timeline:", err);
@@ -624,12 +724,12 @@ function selectHeatmapDay(date) {
   window.scrollTo({ top: 300, behavior: 'smooth' });
 }
 
-// Fetch Technologies from Backend
+// Fetch Technologies (live backend or bundled snapshot)
 async function fetchTechnologies() {
   try {
-    const res = await fetch('/api/tools');
-    if (!res.ok) return;
-    state.technologies = await res.json();
+    const tools = await API.getTools();
+    if (!Array.isArray(tools)) return;
+    state.technologies = tools;
     renderDirectory();
     renderCompareSelector();
   } catch (err) {
@@ -960,9 +1060,7 @@ window.openEvolutionModal = async function(toolId) {
   try {
     let data = state.evolutionCache.get(toolId);
     if (!data) {
-      const res = await fetch(`/api/tools/${toolId}/evolution?days=30`);
-      if (!res.ok) throw new Error('evolution request failed');
-      data = await res.json();
+      data = await API.getEvolution(toolId, 30);
       state.evolutionCache.set(toolId, data);
     }
 
@@ -1088,20 +1186,11 @@ async function executeToolSearch() {
   elements.btnFindTools.innerHTML = `<span>Analyzing Requirements...</span>`;
 
   try {
-    const payload = {
+    const data = await API.recommend({
       query: query,
-      user_skill_level: elements.skillLevelSelect.value,
-      force_free_only: elements.checkFreeOnly.checked
-    };
-
-    const res = await fetch('/api/recommend', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      userSkillLevel: elements.skillLevelSelect.value || null,
+      forceFreeOnly: elements.checkFreeOnly.checked || null
     });
-
-    if (!res.ok) throw new Error('Search failed');
-    const data = await res.json();
     renderRecommendations(data);
   } catch (err) {
     elements.recommendationsContainer.innerHTML = `<div class="empty-state"><p>Error extracting tool recommendations. Try again.</p></div>`;
@@ -1239,15 +1328,10 @@ async function executeCompare() {
   }
 
   try {
-    const res = await fetch('/api/compare', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tool_ids: toolIds })
-    });
-    if (!res.ok) throw new Error('Compare failed');
-    const data = await res.json();
+    const data = await API.compare({ toolIds });
     renderCompareTable(data);
   } catch (err) {
+    console.error('Compare failed:', err);
     elements.compareTableContainer.innerHTML = `<div class="empty-state"><p>Error generating comparison table.</p></div>`;
   }
 }

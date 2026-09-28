@@ -2442,3 +2442,68 @@ body {
   color: var(--accent-cyan);
 }
 
+/* =========================================================================
+   PWA — install button and data-source badge
+   ========================================================================= */
+.btn-install {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent-cyan) 100%);
+  color: #fff;
+  border: none;
+  padding: 9px 16px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 0 14px var(--primary-glow);
+  transition: transform 0.2s, filter 0.2s;
+  white-space: nowrap;
+}
+
+.btn-install:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.btn-install:active { transform: translateY(0); }
+
+.btn-install[hidden] { display: none; }
+
+.install-icon { font-size: 0.95rem; line-height: 1; }
+
+/* Shown only when no backend was found, so the user knows the data is frozen. */
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mode-chip[hidden] { display: none; }
+
+.mode-chip.offline {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: var(--accent-amber);
+}
+
+/* Installed-mode polish: no browser chrome to blend into, so give the
+   standalone window a bit more breathing room at the top. */
+@media (display-mode: standalone) {
+  .platform-header { padding-top: env(safe-area-inset-top, 0px); }
+}
+
+/* Small phones: the header row wraps, so let the new controls span cleanly. */
+@media (max-width: 640px) {
+  .btn-install .install-text { display: none; }
+  .btn-install { padding: 9px 12px; }
+  .mode-chip .chip-text { display: none; }
+  .mode-chip { padding: 7px 10px; }
+}
+

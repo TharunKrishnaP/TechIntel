@@ -1,0 +1,80 @@
+{
+  "generated_at": "2026-09-28 19:16 UTC",
+  "timeline_days": 30,
+  "counts": {
+    "events": 82,
+    "tools": 10,
+    "evolution_files": 10
+  },
+  "date_range": {
+    "oldest": "2026-08-30 00:45 UTC",
+    "newest": "2026-09-28 19:04 UTC"
+  },
+  "stats": {
+    "new_today": 5,
+    "new_this_week": 19,
+    "new_this_month": 82
+  },
+  "technologies": [
+    {
+      "id": "beautiful-ai",
+      "name": "Beautiful.ai",
+      "events": 8,
+      "trail": 8
+    },
+    {
+      "id": "claude-3-5-sonnet",
+      "name": "Claude 3.5 Sonnet",
+      "events": 8,
+      "trail": 8
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "events": 9,
+      "trail": 8
+    },
+    {
+      "id": "gamma-app",
+      "name": "Gamma App",
+      "events": 9,
+      "trail": 8
+    },
+    {
+      "id": "marp",
+      "name": "Marp (Markdown Presentation)",
+      "events": 8,
+      "trail": 8
+    },
+    {
+      "id": "nextjs",
+      "name": "Next.js",
+      "events": 5,
+      "trail": 5
+    },
+    {
+      "id": "python",
+      "name": "Python",
+      "events": 9,
+      "trail": 8
+    },
+    {
+      "id": "qdrant",
+      "name": "Qdrant",
+      "events": 9,
+      "trail": 8
+    },
+    {
+      "id": "slidesai",
+      "name": "SlidesAI",
+      "events": 8,
+      "trail": 8
+    },
+    {
+      "id": "supabase",
+      "name": "Supabase",
+      "events": 8,
+      "trail": 8
+    }
+  ]
+}

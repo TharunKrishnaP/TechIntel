@@ -1,0 +1,56 @@
+{
+  "name": "TechIntel — Live Technology Intelligence",
+  "short_name": "TechIntel",
+  "description": "Track 30 days of verified technology releases, compare tools, and see how fast each project is actually moving.",
+  "id": "./",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#070a18",
+  "theme_color": "#070a18",
+  "categories": ["news", "productivity", "developer", "utilities"],
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Release Feed",
+      "short_name": "Feed",
+      "url": "./index.html#feed",
+      "description": "The last 30 days of verified releases"
+    },
+    {
+      "name": "Find a Tool",
+      "short_name": "Find",
+      "url": "./index.html#finder",
+      "description": "Describe a goal, get ranked tool suggestions"
+    },
+    {
+      "name": "Tech Directory",
+      "short_name": "Tools",
+      "url": "./index.html#directory",
+      "description": "Browse tracked tools and their evolution history"
+    }
+  ]
+}

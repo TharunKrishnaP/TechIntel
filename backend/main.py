@@ -179,8 +179,35 @@ async def api_refresh_feed(background_tasks: BackgroundTasks):
 
 # Mount static frontend
 if os.path.exists(FRONTEND_DIR):
-    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
-
-    @app.get("/")
+    @app.get("/", include_in_schema=False)
     async def serve_index():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+    # These two need explicit media types. `manifest.json` gets the explicit
+    # manifest media type (Chrome accepts application/manifest+json or
+    # application/json; GitHub Pages serves .webmanifest as octet-stream, which
+    # Chrome refuses — hence the .json extension), and a service worker served
+    # with the wrong type is rejected outright.
+    @app.get("/manifest.json", include_in_schema=False)
+    async def serve_manifest():
+        return FileResponse(
+            os.path.join(FRONTEND_DIR, "manifest.json"),
+            media_type="application/manifest+json",
+        )
+
+    @app.get("/sw.js", include_in_schema=False)
+    async def serve_service_worker():
+        return FileResponse(
+            os.path.join(FRONTEND_DIR, "sw.js"),
+            media_type="text/javascript",
+            headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"},
+        )
+
+    # Serve the whole frontend from the root, not /static, so the app uses
+    # relative URLs and therefore also works from a subpath (e.g. GitHub Pages
+    # at /TharunKrishnaP/TechIntel) with no path rewriting.
+    #
+    # This mount is registered last on purpose: FastAPI matches routes in
+    # declaration order, so every /api/* route above still wins, and this catch
+    # -all only sees paths nothing else claimed.
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
