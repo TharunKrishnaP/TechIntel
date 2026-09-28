@@ -21,8 +21,6 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
-
       - name: Install Capacitor dependencies
         working-directory: mobile
         run: npm ci
@@ -30,6 +28,30 @@ jobs:
       - name: Sync web assets into the Android project
         working-directory: mobile
         run: npx cap sync android
+
+      # The ubuntu-latest image already ships an Android SDK (ANDROID_SDK_ROOT)
+      # with accepted licenses — no setup action needed (that's also what the
+      # official nowinandroid workflow does). This step only makes sure the SDK
+      # is writable and has the platform/build-tools our project pins; every
+      # command tolerates failure so the preinstalled SDK is always the fallback.
+      - name: Prepare Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          echo "SDK root: $SDK"
+          sudo chown -R "$USER" "$SDK" 2>/dev/null || true
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SM" ]; then
+            for d in "$SDK"/cmdline-tools/*/bin/sdkmanager; do
+              [ -x "$d" ] && SM="$d" && break
+            done
+          fi
+          if [ -x "$SM" ]; then
+            echo "sdkmanager: $SM"
+            yes | "$SM" --licenses >/dev/null 2>&1 || true
+            "$SM" "platforms;android-35" "build-tools;35.0.0" >/dev/null 2>&1 || true
+          else
+            echo "No sdkmanager found — relying on the preinstalled SDK."
+          fi
 
       - name: Build debug APK
         working-directory: mobile/android
