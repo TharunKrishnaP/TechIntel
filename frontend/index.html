@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="nebula">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TechIntel — Live Technology Intelligence & Tool Radar</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="theme-nebula">
+  <!-- Glowing Animated Aurora Light Orbs -->
+  <div class="aurora-bg-container">
+    <div class="aurora-orb orb-1"></div>
+    <div class="aurora-orb orb-2"></div>
+    <div class="aurora-orb orb-3"></div>
+  </div>
+
+  <!-- Interactive Ambient Cyber-Radar Canvas -->
+  <canvas id="radarMeshCanvas" class="bg-radar-canvas"></canvas>
+
+  <!-- Top Navigation Header -->
+  <header class="platform-header">
+    <div class="header-left">
+      <div class="brand-logo" onclick="switchTab('feed')">
+        <div class="radar-scanner">
+          <div class="radar-sweep"></div>
+          <span class="pulse-core"></span>
+        </div>
+        <div class="brand-text">
+          <h1>Tech<span>Intel</span></h1>
+          <span class="brand-badge">LIVE RADAR</span>
+        </div>
+      </div>
+      <div class="header-stats" id="headerStats">
+        <div class="stat-pill"><span class="stat-label">Events Tracked:</span> <strong id="statTotalEvents">--</strong></div>
+        <div class="stat-pill alert"><span class="stat-label">Security Alerts:</span> <strong id="statSecEvents">--</strong></div>
+        <div class="stat-pill ai"><span class="stat-label">AI Updates:</span> <strong id="statAiEvents">--</strong></div>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <!-- 4-Theme Interactive Selector -->
+      <div class="theme-picker-wrapper">
+        <span class="picker-label">Theme:</span>
+        <div class="theme-chips" id="themeChips">
+          <button class="theme-chip active" data-theme="nebula" title="Nebula Aurora: Cosmic Deep Indigo & Neon Cyan">🌌 Nebula</button>
+          <button class="theme-chip" data-theme="cyberpunk" title="Cyberpunk: Synthwave Magenta & Electric Emerald">⚡ Cyber</button>
+          <button class="theme-chip" data-theme="hologram" title="Hologram: Deep Space Obsidian & Icy Blue">🔮 Holo</button>
+          <button class="theme-chip" data-theme="sunset" title="Tokyo Sunset: Warm Crimson & Amber Radiance">🌅 Sunset</button>
+        </div>
+      </div>
+
+      <div class="last-visit-chip" id="lastVisitChip" title="Updates logged in current live window">
+        <span class="chip-icon">⚡</span>
+        <span class="chip-text">New Today: <strong id="newCountBadge">+28</strong></span>
+      </div>
+
+      <button class="btn-refresh" id="btnRefreshFeed" title="Trigger real-time feed sync">
+        <svg class="refresh-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        <span>Live Radar Sync</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Live Pulse Marquee Ticker -->
+  <div class="live-ticker-bar">
+    <div class="ticker-badge">
+      <span class="ticker-dot"></span>
+      <span>LIVE RADAR SWEEP</span>
+    </div>
+    <div class="ticker-content-track" id="tickerTrack">
+      <span class="ticker-item" onclick="filterBySearch('Python 3.13')">🔥 <strong>Python 3.13:</strong> Free-threaded (No-GIL) mode experimental build released</span>
+      <span class="ticker-item" onclick="filterBySearch('Gamma')">🎨 <strong>Gamma v2.8:</strong> Editable PowerPoint PPTX two-way sync launched</span>
+      <span class="ticker-item" onclick="filterBySearch('Qdrant')">🗄️ <strong>Qdrant 1.12:</strong> 2-bit binary quantization cuts cloud RAM by 95%</span>
+      <span class="ticker-item" onclick="filterBySearch('OpenSSL')">🛡️ <strong>OpenSSL:</strong> Critical Remote DoS patch released (CVE-2026-4819)</span>
+      <span class="ticker-item" onclick="filterBySearch('Cursor')">💻 <strong>Cursor v0.41:</strong> Autonomous background agent mode for multi-file refactoring</span>
+    </div>
+  </div>
+
+  <!-- Platform Mode Bar -->
+  <nav class="mode-navigation">
+    <div class="nav-container">
+      <div class="nav-tabs">
+          <button class="tab-btn active" data-tab="feed">
+            <span class="tab-icon">⚡</span>
+            <div class="tab-text-group">
+              <span class="tab-label">What changed in tech?</span>
+              <span class="tab-sub">Live Radar · Real-time updates</span>
+            </div>
+          </button>
+          <button class="tab-btn" data-tab="finder">
+            <span class="tab-icon">🎯</span>
+            <div class="tab-text-group">
+              <span class="tab-label">Find a Tool</span>
+              <span class="tab-sub">Tell us your goal · We match tools</span>
+            </div>
+          </button>
+          <button class="tab-btn" data-tab="compare">
+            <span class="tab-icon">⚖️</span>
+            <div class="tab-text-group">
+              <span class="tab-label">Compare Tools</span>
+              <span class="tab-sub">Side-by-side · See what wins</span>
+            </div>
+          </button>
+          <button class="tab-btn" data-tab="directory">
+            <span class="tab-icon">📁</span>
+            <div class="tab-text-group">
+              <span class="tab-label">Tech Directory</span>
+              <span class="tab-sub">Verified database · All tools</span>
+            </div>
+          </button>
+        </div>
+
+      <!-- Global Search / Filter -->
+      <div class="nav-actions">
+        <div class="search-box">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="globalSearchInput" placeholder="Instant filter events, tools, CVEs..." />
+          <button class="search-clear-btn" id="btnClearSearch" style="display:none;">✕</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Interactive Beginner Guide Card -->
+  <div class="welcome-guide-card" id="welcomeBanner">
+    <div class="guide-content">
+      <div class="guide-tag">✨ REAL-TIME TECH INTELLIGENCE FOR EVERYONE</div>
+      <h3>Understand what changed in technology — with zero confusion</h3>
+      <p>TechIntel continuously analyzes software releases, AI models, and security patches. Toggle between <strong>Explain Like I'm New</strong> (plain English) and <strong>Technical Mode</strong> (architecture delta) or adjust the <strong>Reading Depth</strong> slider!</p>
+    </div>
+    <div class="guide-actions">
+      <button class="btn-guide-cta" onclick="switchTab('finder')">Find My Tool ➔</button>
+      <button class="btn-guide-close" id="btnDismissBanner" title="Dismiss guide">✕</button>
+    </div>
+  </div>
+
+  <!-- Main Content Layout -->
+  <main class="main-container">
+
+    <!-- TAB 1: LIVE FEED -->
+    <section id="tab-feed" class="tab-view active">
+      <!-- Controls Bar: Category, Severity, Depth Slider, Audience Toggle -->
+      <div class="feed-controls-card">
+        <div class="controls-row-top">
+          <div class="category-filters" id="categoryFilters">
+            <button class="cat-chip active" data-cat="All">All Updates</button>
+            <button class="cat-chip" data-cat="AI/ML">🧠 AI & Models</button>
+            <button class="cat-chip" data-cat="DevTools">💻 Developer Tools</button>
+            <button class="cat-chip" data-cat="Databases">🗄️ Databases</button>
+            <button class="cat-chip" data-cat="Security">🛡️ Security Alerts</button>
+            <button class="cat-chip" data-cat="Frontend">🎨 Frontend & UI</button>
+          </div>
+
+          <div class="importance-filters">
+            <label>Severity:</label>
+            <select id="importanceSelect">
+              <option value="All">All Severities</option>
+              <option value="critical">🔴 Critical (Must Know)</option>
+              <option value="major">🟠 Major Releases</option>
+              <option value="significant">🟡 Feature Updates</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="controls-row-bottom">
+          <!-- Reading Depth Level Slider (Interactive 3-tier view) -->
+          <div class="depth-slider-wrapper">
+            <span class="depth-label">Reading Depth:</span>
+            <div class="depth-pills" id="depthPills">
+              <button class="depth-btn" data-depth="quick" title="30-second bullet summary">⚡ 30-Sec TL;DR</button>
+              <button class="depth-btn active" data-depth="standard" title="2-minute balanced breakdown">⏱️ 2-Min Summary</button>
+              <button class="depth-btn" data-depth="deep" title="Full architectural deep dive & citations">🔬 Deep Dive Specs</button>
+            </div>
+          </div>
+
+          <!-- Audience Mode Toggle -->
+          <div class="audience-toggle-wrapper">
+            <span class="toggle-title">Tone:</span>
+            <div class="audience-switch">
+              <button class="toggle-option active" id="btnModeTech" data-mode="tech" title="Technical architecture & under-the-hood delta">
+                <span class="mode-icon">🛠️</span> Technical
+              </button>
+              <button class="toggle-option" id="btnModeSimple" data-mode="simple" title="Plain English explanation without heavy jargon">
+                <span class="mode-icon">💡</span> Explain Like I'm New
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feed Stream -->
+      <div class="events-feed-grid" id="eventsContainer">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Scanning verified technology sources and clustering canonical updates...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: FIND A TOOL (PURPOSE-BASED MATCHER) -->
+    <section id="tab-finder" class="tab-view">
+      <div class="finder-hero-card">
+        <div class="hero-header-badge">🎯 PURPOSE-BASED INTELLIGENCE</div>
+        <h2>What are you trying to accomplish?</h2>
+        <p class="hero-subtext">Describe what you need in plain English. We extract your requirements and calculate real-time suitability without static biased rankings.</p>
+
+        <!-- Quick Goal Presets as Interactive Visual Cards -->
+        <div class="quick-goal-grid">
+          <div class="goal-card" onclick="selectQuickGoal('I need a free AI tool to generate presentations with export to PowerPoint')">
+            <span class="goal-icon">🎨</span>
+            <div class="goal-info">
+              <strong>AI Presentations</strong>
+              <small>Slides, decks & templates</small>
+            </div>
+          </div>
+          <div class="goal-card" onclick="selectQuickGoal('Which AI coding assistant should I use for codebase indexing and refactoring?')">
+            <span class="goal-icon">💻</span>
+            <div class="goal-info">
+              <strong>Code Assistant</strong>
+              <small>Autocomplete & refactoring</small>
+            </div>
+          </div>
+          <div class="goal-card" onclick="selectQuickGoal('I need an open-source database for vector search with fast embeddings')">
+            <span class="goal-icon">🗄️</span>
+            <div class="goal-info">
+              <strong>Vector Database</strong>
+              <small>RAG, embeddings & search</small>
+            </div>
+          </div>
+          <div class="goal-card" onclick="selectQuickGoal('Open source markdown presentation tool for developers')">
+            <span class="goal-icon">📝</span>
+            <div class="goal-info">
+              <strong>Markdown Slides</strong>
+              <small>Developer zero-lock-in</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Natural language query box -->
+        <div class="query-input-box">
+          <textarea id="toolFinderInput" rows="2" placeholder="e.g. I need a free AI tool to create presentations with PowerPoint export..."></textarea>
+          <div class="query-actions">
+            <div class="query-options">
+              <label class="checkbox-label">
+                <input type="checkbox" id="checkFreeOnly" checked>
+                <span>Free tier or Open Source only</span>
+              </label>
+              <select id="skillLevelSelect">
+                <option value="Any">Your Skill: Any Level</option>
+                <option value="Beginner">Your Skill: Beginner / Non-technical</option>
+                <option value="Intermediate">Your Skill: Intermediate</option>
+                <option value="Advanced">Your Skill: Developer / Architect</option>
+              </select>
+            </div>
+            <button class="btn-primary" id="btnFindTools">
+              <span>Find Best Tools</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Extracted Requirements Inspection Card -->
+      <div id="requirementsInspectionCard" class="requirements-card" style="display: none;">
+        <div class="req-header">
+          <span class="req-title">Extracted Requirement Criteria</span>
+          <span class="req-status">✓ Analyzed via AI Intelligence Pipeline</span>
+        </div>
+        <div class="req-chips" id="requirementsChips"></div>
+      </div>
+
+      <!-- Recommendation Results Grid -->
+      <div class="recommendations-container" id="recommendationsContainer">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 3: COMPARE TOOLS -->
+    <section id="tab-compare" class="tab-view">
+      <div class="compare-header-card">
+        <h2>Side-by-Side Technology Comparison Matrix</h2>
+        <p>Pick technologies below to view side-by-side capabilities, pricing models, free tier limits, and tradeoffs.</p>
+        <div class="tool-selector-bar">
+          <label>Select Tools to Compare (2 or more):</label>
+          <div class="compare-checkbox-group" id="compareCheckboxGroup">
+            <!-- Rendered from database -->
+          </div>
+          <button class="btn-primary-small" id="btnExecuteCompare">Update Comparison Matrix</button>
+        </div>
+      </div>
+
+      <div class="compare-table-wrapper" id="compareTableContainer">
+        <div class="empty-state">
+          <p>Select at least 2 technologies above to generate the comparison matrix.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: TECH DIRECTORY -->
+    <section id="tab-directory" class="tab-view">
+      <div class="directory-header">
+        <div>
+          <h2>Technology Knowledge Database</h2>
+          <p>Curated and continuously updated profiles of tools, libraries, and frameworks with version tracking.</p>
+        </div>
+        <div class="directory-filter">
+          <select id="directoryCatSelect">
+            <option value="All">All Categories</option>
+            <option value="AI/ML">AI & Machine Learning</option>
+            <option value="DevTools">Developer Tools</option>
+            <option value="Databases">Databases & Storage</option>
+            <option value="Frontend">Frontend Frameworks</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="directory-grid" id="directoryContainer">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Sources & Verification Modal -->
+  <div class="modal-overlay" id="sourcesModal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-badge" id="modalTierBadge">Tier 1 Verified</span>
+          <h3 id="modalEventTitle">Event Sources & Verification</h3>
+        </div>
+        <button class="modal-close" id="btnModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="verification-summary" id="modalVerificationSummary"></div>
+        <h4>Reporting Outlets & Documentation (<span id="modalSourcesCount">0</span>)</h4>
+        <div class="citations-list" id="modalCitationsList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

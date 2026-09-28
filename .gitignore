@@ -1,0 +1,35 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment & secrets
+.env
+*.env
+.env.local
+
+# Database (local only — seeded fresh on deploy)
+backend/techintel.db
+backend/*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
