@@ -20,6 +20,22 @@ backend/*.db
 *.db-shm
 *.db-wal
 
+# Desktop EXE build outputs
+desktop/build/
+desktop/dist/
+desktop/*.spec
+*.spec
+
+# Mobile (Capacitor) build outputs — keep the android/ project itself committed
+mobile/node_modules/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/.idea/
+mobile/android/captures/
+mobile/android/app/src/main/assets/public/capacitor.config.json
+
 # IDE
 .vscode/
 .idea/

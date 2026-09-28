@@ -4,10 +4,16 @@ import os
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from .models import TechEvent, Technology, SourceCitation, WhatChanged, FeedStats
+from .app_paths import get_db_path
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "techintel.db")
+# Resolved lazily through app_paths so the desktop EXE (frozen) gets a writable
+# user-data location instead of the read-only extraction dir.
+DB_PATH = get_db_path()
 
 def get_connection():
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")

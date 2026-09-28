@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TechIntel brand colours (app-level, overrides the Capacitor library defaults). -->
+<resources>
+    <color name="colorPrimary">#0E7490</color>
+    <color name="colorPrimaryDark">#070A18</color>
+    <color name="colorAccent">#22D3EE</color>
+    <!-- Solid launch-screen background (no stretched logo image). -->
+    <color name="launch_background">#070A18</color>
+</resources>

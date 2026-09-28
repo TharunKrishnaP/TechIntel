@@ -112,5 +112,53 @@ for icon in manifest["icons"]:
 purposes = {i.get("purpose", "any") for i in manifest["icons"]}
 check("maskable" in purposes, "manifest declares a maskable icon (required for Android)")
 
+# ---------------------------------------------------------------------------
+# Windows .ico (desktop EXE): valid container, PNG-encoded frames, sizes match
+# ---------------------------------------------------------------------------
+print("\n== techintel.ico (desktop EXE) ==")
+ico_path = os.path.join(ICON_DIR, "techintel.ico")
+if os.path.exists(ico_path):
+    with open(ico_path, "rb") as fh:
+        ico = fh.read()
+    reserved, ico_type, count = struct.unpack("<HHH", ico[:6])
+    check(reserved == 0 and ico_type == 1, f"ICO header valid (type={ico_type})")
+    check(count >= 3, f"{count} frames embedded (want >=3)")
+    ok_frames = 0
+    for i in range(count):
+        w, h, colors, _res, planes, bpp, size, offset = struct.unpack(
+            "<BBBBHHII", ico[6 + 16 * i:22 + 16 * i]
+        )
+        w = 256 if w == 0 else w
+        h = 256 if h == 0 else h
+        frame = ico[offset:offset + size]
+        if frame[:8] == b"\x89PNG\r\n\x1a\n" and (w, h) in {(16, 16), (32, 32), (48, 48), (256, 256)}:
+            ok_frames += 1
+    check(ok_frames == count, f"all {count} ICO frames are valid PNGs at expected sizes")
+else:
+    check(False, "techintel.ico exists")
+
+# ---------------------------------------------------------------------------
+# Android launcher mipmaps: all 5 density buckets, both icon names
+# ---------------------------------------------------------------------------
+print("\n== Android launcher mipmaps ==")
+DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
+FOREGROUND_SIZES = {"mdpi": 108, "hdpi": 162, "xhdpi": 216, "xxhdpi": 324, "xxxhdpi": 432}
+aroot = os.path.join(ICON_DIR, "android")
+for density, size in DENSITIES.items():
+    for stem in ("ic_launcher", "ic_launcher_round"):
+        p = os.path.join(aroot, f"mipmap-{density}", f"{stem}.png")
+        if not os.path.exists(p):
+            check(False, f"{stem}.png ({density}) exists")
+            continue
+        w, h, _ = read_png(p)
+        check((w, h) == (size, size), f"{stem}.png ({density}) is {size}x{size}")
+    fg = os.path.join(aroot, f"mipmap-{density}", "ic_launcher_foreground.png")
+    fg_size = FOREGROUND_SIZES[density]
+    if os.path.exists(fg):
+        w, h, _ = read_png(fg)
+        check((w, h) == (fg_size, fg_size), f"ic_launcher_foreground.png ({density}) is {fg_size}x{fg_size}")
+    else:
+        check(False, f"ic_launcher_foreground.png ({density}) exists")
+
 print(f"\n{'ALL ICON CHECKS PASSED' if not failures else str(len(failures)) + ' FAILURES'}")
 sys.exit(1 if failures else 0)

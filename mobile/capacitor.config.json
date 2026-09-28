@@ -1,0 +1,13 @@
+{
+  "appId": "com.techintel.live",
+  "appName": "TechIntel",
+  "webDir": "../frontend",
+  "version": "1.0.0",
+  "android": {
+    "backgroundColor": "#070a18"
+  },
+  "server": {
+    "androidScheme": "https",
+    "cleartext": false
+  }
+}

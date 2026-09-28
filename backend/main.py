@@ -21,6 +21,7 @@ from .services.matcher import (
     match_tools_for_purpose, generate_comparison_matrix, find_alternatives_for_tool
 )
 from .pipeline.ingestion import sync_all_feeds
+from .app_paths import get_frontend_dir
 
 app = FastAPI(
     title="TechIntel - Live Technology Intelligence Platform",
@@ -36,7 +37,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+# Resolved lazily: dev pulls from the repo, the frozen desktop EXE pulls from
+# its bundled `frontend` directory inside _MEIPASS.
+FRONTEND_DIR = get_frontend_dir()
 
 @app.on_event("startup")
 async def startup_event():

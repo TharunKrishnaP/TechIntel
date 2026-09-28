@@ -1,0 +1,51 @@
+name: Build Desktop EXE
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install build + runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pywebview
+
+      - name: Regenerate icons (PNG / ICO / Android mipmaps)
+        run: python -m backend.make_icons
+
+      - name: Build one-file EXE
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name TechIntel `
+            --icon frontend\icons\techintel.ico `
+            --add-data "frontend;frontend" `
+            --collect-submodules uvicorn `
+            --hidden-import webview.platforms.edgechromium `
+            --hidden-import webview.platforms.winforms `
+            --exclude-module tkinter `
+            --exclude-module matplotlib `
+            --exclude-module numpy `
+            --exclude-module pandas `
+            desktop\launcher.py
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TechIntel-Desktop-EXE
+          path: dist/TechIntel.exe
+
+      - name: Attach to GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/TechIntel.exe

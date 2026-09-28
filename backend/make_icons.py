@@ -55,6 +55,49 @@ def _write_png(path, width, height, pixels):
     return len(png)
 
 
+def png_bytes(width, height, pixels):
+    """Return the PNG bytes without touching the filesystem (for ICO embedding)."""
+    raw = bytearray()
+    for y in range(height):
+        raw.append(0)
+        raw.extend(pixels[y * width * 4:(y + 1) * width * 4])
+
+    def chunk(tag, data):
+        c = struct.pack(">I", len(data)) + tag + data
+        return c + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    png = b"\x89PNG\r\n\x1a\n"
+    png += chunk(b"IHDR", ihdr)
+    png += chunk(b"IDAT", zlib.compress(bytes(raw), 9))
+    png += chunk(b"IEND", b"")
+    return png
+
+
+def _write_ico(path, images):
+    """
+    Write a Windows .ico container holding PNG-encoded frames. PNG-in-ICO is
+    valid since Vista and lets us reuse the same renderer with zero extra
+    tooling (no Pillow, no PIL->ICO conversion). Sizes 16..256.
+    ``images`` is a list of (size, png_bytes).
+    """
+    header = struct.pack("<HHH", 0, 1, len(images))
+    entries = b""
+    blobs = b""
+    offset = 6 + 16 * len(images)
+    for size, data in images:
+        # A 0 byte in the directory means 256 in the icon world.
+        dim = 0 if size >= 256 else size
+        entries += struct.pack(
+            "<BBBBHHII", dim, dim, 0, 0, 1, 32, len(data), offset
+        )
+        blobs += data
+        offset += len(data)
+    with open(path, "wb") as fh:
+        fh.write(header + entries + blobs)
+    return offset
+
+
 def _lerp(a, b, t):
     return a + (b - a) * t
 
@@ -189,6 +232,40 @@ def main():
         path = os.path.join(ICON_DIR, name)
         nbytes = _write_png(path, size, size, px)
         print(f"  {name:24s} {size}x{size}  {nbytes/1024:6.1f} KB  maskable={maskable}")
+
+    # Windows .ico for the desktop EXE (PNG-encoded frames, Vista+).
+    ico_frames = [
+        (16, png_bytes(16, 16, render_icon(16))),
+        (32, png_bytes(32, 32, render_icon(32))),
+        (48, png_bytes(48, 48, render_icon(48))),
+        (256, png_bytes(256, 256, render_icon(256))),
+    ]
+    ico_path = os.path.join(ICON_DIR, "techintel.ico")
+    _write_ico(ico_path, ico_frames)
+    print(f"  {'techintel.ico':24s} {len(ico_frames)} frames      (Windows EXE icon)")
+
+    # Android launcher icons: legacy PNGs at every density bucket. Capacitor's
+    # generated project references @mipmap/ic_launcher and ic_launcher_round;
+    # the build patches those with these files.
+    densities = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
+    # The adaptive-icon foreground layer is drawn on a 108dp canvas; at each
+    # density bucket that is exactly 108/162/216/324/432 px. The maskable render
+    # keeps the radar inset inside the ~66% safe zone Android masks to a circle.
+    foreground_sizes = {"mdpi": 108, "hdpi": 162, "xhdpi": 216, "xxhdpi": 324, "xxxhdpi": 432}
+    aroot = os.path.join(ICON_DIR, "android")
+    print(f"Writing Android launcher icons -> {aroot}")
+    for density, size in densities.items():
+        res = os.path.join(aroot, f"mipmap-{density}")
+        os.makedirs(res, exist_ok=True)
+        px = render_icon(size)
+        for stem in ("ic_launcher", "ic_launcher_round"):
+            p = os.path.join(res, f"{stem}.png")
+            _write_png(p, size, size, px)
+            print(f"  {stem}.png ({density}, {size}x{size})  -> mipmap-{density}")
+        fg = os.path.join(res, "ic_launcher_foreground.png")
+        fg_size = foreground_sizes[density]
+        _write_png(fg, fg_size, fg_size, render_icon(fg_size, maskable=True))
+        print(f"  ic_launcher_foreground.png ({density}, {fg_size}x{fg_size}, maskable)")
 
 
 if __name__ == "__main__":
