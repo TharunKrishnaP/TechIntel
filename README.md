@@ -21,11 +21,24 @@ Most tech-news apps just dump articles at you. **TechIntel is different** — it
 
 > **"What changed in tech today?"** — and — **"What tool should I use for this?"**
 
-It does this with real-time feed ingestion, AI-powered analysis, plain-English explanations (with everyday analogies!), and a side-by-side comparison engine.
+It does this with real-time feed ingestion, AI-powered analysis, plain-English explanations (with everyday analogies!), a side-by-side comparison engine, and a **30-day release history** so you can see how a tool got to where it is today — not just what happened today.
 
 ---
 
 ## ✨ Features
+
+### 📜 30-Day Release History — Not Just Today
+Most tech feeds only show you the last 24 hours, which makes it impossible to answer *"how fast is this thing moving?"* TechIntel keeps a rolling month of history:
+
+- **📊 30-day activity heatmap** — one bar per day, sized by how many releases shipped. Click any bar to jump the feed to that single day.
+- **🕒 Time window controls** — Today / 7 Days / 30 Days / All Time, plus a custom `from → to` date range.
+- **Relative age on every card** — "3h ago", "yesterday", "12 days ago", so a month of entries stays scannable.
+- **🧬 Per-tool evolution timeline** — click **History** on any tool (feed card or directory) to open its version trail, oldest → newest, alongside an event-type breakdown.
+- **Real windowed stats** — the header shows genuine counts for the last 24h / 7 days / 30 days, not a hardcoded number.
+
+The history is generated deterministically from each project's real version
+sequence, and is anchored to a stored day so re-seeding never duplicates rows or
+lets the window quietly drift out of the 30-day range.
 
 ### ⚡ Live Radar — What Changed in Tech?
 - Real-time event feed from verified sources (GitHub Releases, Official Changelogs, CVE advisories)
@@ -50,6 +63,7 @@ It does this with real-time feed ingestion, AI-powered analysis, plain-English e
 ### 📁 Tech Directory — Verified Database
 - Filterable database of tools, libraries, and frameworks
 - Version tracking, pricing details, alternative suggestions
+- One-click **History** button per tool to open its 30-day evolution trail
 
 ---
 
@@ -82,7 +96,8 @@ TechIntel/
 ├── backend/
 │   ├── main.py              # FastAPI server & REST API endpoints
 │   ├── models.py            # Pydantic v2 data schemas
-│   ├── database.py          # SQLite + seed data (plain-English events)
+│   ├── database.py          # SQLite layer, query helpers & curated seed events
+│   ├── seed_history.py      # Deterministic 30-day release-history generator
 │   ├── test_api.py          # Automated test suite
 │   ├── pipeline/
 │   │   ├── clustering.py    # Deduplication & source tier classifier
@@ -91,7 +106,7 @@ TechIntel/
 │   └── services/
 │       └── matcher.py       # Purpose-based tool matcher & comparison
 └── frontend/
-    ├── index.html           # Main UI (4 tabs, animated themes)
+    ├── index.html           # Main UI (4 tabs, heatmap, evolution modal)
     ├── styles.css           # Theme system + glassmorphism
     └── app.js               # Radar canvas, state machine, rendering
 ```
@@ -147,14 +162,32 @@ Open **http://127.0.0.1:8000** in your browser.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/stats` | Platform metrics (events, security alerts, AI updates) |
+| `GET` | `/api/stats` | Platform metrics, incl. `new_today` / `new_this_week` / `new_this_month` |
 | `GET` | `/api/feed` | Filterable canonical events feed |
+| `GET` | `/api/timeline?days=30` | Per-day event counts (feeds the activity heatmap) |
 | `GET` | `/api/feed/{id}` | Full event with source citations |
 | `GET` | `/api/tools` | Technology directory |
+| `GET` | `/api/tools/{id}/events` | Events for one tool, optionally windowed |
+| `GET` | `/api/tools/{id}/evolution?days=30` | Version trail, event breakdown & history for one tool |
 | `GET` | `/api/tools/{id}/alternatives` | Alternative tool discovery |
 | `POST` | `/api/recommend` | Purpose-based tool finder |
 | `POST` | `/api/compare` | Side-by-side comparison matrix |
 | `POST` | `/api/refresh-feed` | Trigger live feed sync |
+
+**Time filtering.** `/api/feed` and `/api/tools/{id}/events` accept either
+`days=<N>` (trailing window) or an explicit `date_from` / `date_to` pair in
+`YYYY-MM-DD` form. Explicit bounds win if both are supplied.
+
+```bash
+# Last 7 days
+curl "http://127.0.0.1:8000/api/feed?days=7&limit=50"
+
+# A specific slice of history
+curl "http://127.0.0.1:8000/api/feed?date_from=2026-09-01&date_to=2026-09-15"
+
+# How a single tool evolved over the trailing month
+curl "http://127.0.0.1:8000/api/tools/python/evolution?days=30"
+```
 
 ---
 

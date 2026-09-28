@@ -96,6 +96,8 @@ class ComparisonResponse(BaseModel):
 class FeedStats(BaseModel):
     total_events: int
     new_today: int
+    new_this_week: int
+    new_this_month: int
     critical_security_count: int
     ai_updates_count: int
     verified_sources_count: int

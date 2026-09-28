@@ -34,7 +34,10 @@
         </div>
       </div>
       <div class="header-stats" id="headerStats">
-        <div class="stat-pill"><span class="stat-label">Events Tracked:</span> <strong id="statTotalEvents">--</strong></div>
+        <div class="stat-pill live" title="New verified events in the last 24 hours"><span class="stat-label">Last 24h:</span> <strong id="statNewToday">--</strong></div>
+        <div class="stat-pill week" title="New verified events in the last 7 days"><span class="stat-label">7 Days:</span> <strong id="statNewWeek">--</strong></div>
+        <div class="stat-pill month" title="New verified events in the last 30 days"><span class="stat-label">30 Days:</span> <strong id="statNewMonth">--</strong></div>
+        <div class="stat-pill"><span class="stat-label">Total Tracked:</span> <strong id="statTotalEvents">--</strong></div>
         <div class="stat-pill alert"><span class="stat-label">Security Alerts:</span> <strong id="statSecEvents">--</strong></div>
         <div class="stat-pill ai"><span class="stat-label">AI Updates:</span> <strong id="statAiEvents">--</strong></div>
       </div>
@@ -52,9 +55,9 @@
         </div>
       </div>
 
-      <div class="last-visit-chip" id="lastVisitChip" title="Updates logged in current live window">
+      <div class="last-visit-chip" id="lastVisitChip" title="Verified updates in the last 24 hours">
         <span class="chip-icon">⚡</span>
-        <span class="chip-text">New Today: <strong id="newCountBadge">+28</strong></span>
+        <span class="chip-text">New (24h): <strong id="newCountBadge">+0</strong></span>
       </div>
 
       <button class="btn-refresh" id="btnRefreshFeed" title="Trigger real-time feed sync">
@@ -142,6 +145,20 @@
 
     <!-- TAB 1: LIVE FEED -->
     <section id="tab-feed" class="tab-view active">
+      <!-- 30-Day Activity Heatmap: historical release density at a glance -->
+      <div class="activity-heatmap-card">
+        <div class="heatmap-header">
+          <div>
+            <span class="heatmap-title">📊 30-Day Release Activity</span>
+            <p class="heatmap-sub">Click any bar to jump the feed to that day. Darker bars = more releases shipped.</p>
+          </div>
+          <div class="heatmap-legend" id="heatmapLegend"></div>
+        </div>
+        <div class="heatmap-track" id="activityHeatmap">
+          <div class="loading-state" style="padding:20px;"><div class="spinner" style="width:24px;height:24px;border-width:2px;"></div></div>
+        </div>
+      </div>
+
       <!-- Controls Bar: Category, Severity, Depth Slider, Audience Toggle -->
       <div class="feed-controls-card">
         <div class="controls-row-top">
@@ -162,6 +179,27 @@
               <option value="major">🟠 Major Releases</option>
               <option value="significant">🟡 Feature Updates</option>
             </select>
+          </div>
+        </div>
+
+        <!-- Time Window: historical browsing (today / 7d / 30d / custom range) -->
+        <div class="controls-row-time">
+          <div class="time-window-wrapper">
+            <span class="time-window-label">Time Window:</span>
+            <div class="time-pills" id="timePills">
+              <button class="time-btn active" data-days="1" title="Only events from the last 24 hours">⚡ Today</button>
+              <button class="time-btn" data-days="7" title="Releases from the past week">📆 7 Days</button>
+              <button class="time-btn" data-days="30" title="Full historical release trail (past month)">🗓️ 30 Days</button>
+              <button class="time-btn" data-days="all" title="Every event ever tracked">📚 All Time</button>
+            </div>
+          </div>
+          <div class="custom-range-wrapper">
+            <label>Custom:</label>
+            <input type="date" id="dateFromInput" />
+            <span class="range-sep">→</span>
+            <input type="date" id="dateToInput" />
+            <button class="btn-range-apply" id="btnApplyRange">Apply</button>
+            <button class="btn-range-clear" id="btnClearRange" title="Reset to the preset window">Reset</button>
           </div>
         </div>
 
@@ -188,6 +226,12 @@
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- Result summary line so users always know what slice they're looking at -->
+        <div class="feed-result-summary" id="feedResultSummary">
+          <span class="summary-spinner" id="summarySpinner" style="display:none;"></span>
+          <span id="feedSummaryText">Loading feed…</span>
         </div>
       </div>
 
@@ -337,6 +381,43 @@
         <div class="verification-summary" id="modalVerificationSummary"></div>
         <h4>Reporting Outlets & Documentation (<span id="modalSourcesCount">0</span>)</h4>
         <div class="citations-list" id="modalCitationsList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Evolution History Modal — version timeline for a browsed tool -->
+  <div class="modal-overlay" id="evolutionModal" style="display: none;">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-badge" id="evolutionBadge">🧬 EVOLUTION</span>
+          <h3 id="evolutionTitle">Tool Evolution History</h3>
+        </div>
+        <button class="modal-close" id="btnEvolutionClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-loading" id="evolutionLoading">
+          <div class="spinner" style="width:28px;height:28px;border-width:2px;"></div>
+          <p>Reconstructing release trail…</p>
+        </div>
+        <div id="evolutionContent" style="display:none;">
+          <div class="evolution-summary" id="evolutionSummary"></div>
+
+          <div class="evolution-section">
+            <h4>🧬 Version Trail (oldest → newest)</h4>
+            <div class="version-trail" id="versionTrail"></div>
+          </div>
+
+          <div class="evolution-section">
+            <h4>📊 What Kind of Changes Shipped</h4>
+            <div class="breakdown-bars" id="evolutionBreakdown"></div>
+          </div>
+
+          <div class="evolution-section">
+            <h4>🕐 Full Event History <span class="section-hint">(newest first)</span></h4>
+            <div class="evolution-timeline" id="evolutionTimeline"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

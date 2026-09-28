@@ -2,10 +2,18 @@ import asyncio
 import sys
 import os
 
+# Windows consoles default to cp1252, which cannot render the emoji used in the
+# plain-English explanations. Force UTF-8 so the report prints cleanly.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 # Add parent directory to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.database import init_db, seed_database, get_all_events, get_all_technologies, get_stats
+from backend.database import (
+    init_db, seed_database, get_all_events, get_all_technologies, get_stats,
+    get_technology_evolution
+)
 from backend.services.matcher import match_tools_for_purpose, generate_comparison_matrix, find_alternatives_for_tool
 from backend.pipeline.ingestion import sync_all_feeds
 
@@ -85,6 +93,62 @@ async def run_tests():
     alts = find_alternatives_for_tool("gamma-app")
     print(f"Alternatives for Gamma App: {[a.name for a in alts]}")
     assert len(alts) > 0, "Expected alternatives for gamma-app"
+
+    print("\n========================================")
+    print("6. Testing Historical Time-Window Filtering")
+    print("========================================")
+    all_events = get_all_events(limit=200)
+    last_24h = get_all_events(limit=200, days=1)
+    last_week = get_all_events(limit=200, days=7)
+    last_month = get_all_events(limit=200, days=30)
+
+    print(f"All events:        {len(all_events)}")
+    print(f"Last 24 hours:     {len(last_24h)}")
+    print(f"Last 7 days:       {len(last_week)}")
+    print(f"Last 30 days:      {len(last_month)}")
+
+    # Windows must be monotonically nested, and the stats must agree with the feed.
+    assert len(last_24h) <= len(last_week) <= len(last_month) <= len(all_events), \
+        "Time windows must be monotonically nested"
+    assert stats.new_today == len(last_24h), f"new_today ({stats.new_today}) != 24h feed ({len(last_24h)})"
+    assert stats.new_this_week == len(last_week), f"new_this_week ({stats.new_this_week}) != 7d feed ({len(last_week)})"
+    assert stats.new_this_month == len(last_month), f"new_this_month ({stats.new_this_month}) != 30d feed ({len(last_month)})"
+
+    # The 30-day window should actually contain multi-day history, otherwise the
+    # dashboard is showing a single day with extra steps.
+    distinct_days = {e.verified_at[:10] for e in last_month}
+    print(f"Distinct days present in the 30-day window: {len(distinct_days)}")
+    assert len(distinct_days) >= 14, f"Expected a month of history, found only {len(distinct_days)} distinct days"
+    assert len(last_month) > len(last_24h), "Expected more events across 30 days than in a single day"
+
+    print("\n========================================")
+    print("7. Testing Technology Evolution Timeline")
+    print("========================================")
+    for tech_id in ("python", "nextjs", "qdrant"):
+        evo = get_technology_evolution(tech_id, days=30)
+        assert "error" not in evo, f"No evolution data for {tech_id}"
+        assert evo["period_days"] == 30
+        assert evo["summary"]["total_events"] > 0, f"Expected history for {tech_id}"
+        print(f"{evo['technology']['name']} (now {evo['technology']['current_version']}):")
+        print(f"   events={evo['summary']['total_events']} "
+              f"releases={evo['summary']['version_releases']} "
+              f"features={evo['summary']['feature_updates']} "
+              f"patches={evo['summary']['security_patches']}")
+        print(f"   version trail: {[v['version'] for v in evo['version_timeline']]}")
+        print(f"   breakdown: {evo['event_breakdown']}")
+        # Version trail must read oldest -> newest for the UI stepper.
+        dates = [v["date"] for v in evo["version_timeline"]]
+        assert dates == sorted(dates), f"Version trail not chronological for {tech_id}"
+        # Every trail entry must carry a real version, and the trail must show
+        # more than one distinct version or it isn't an "evolution" at all.
+        assert all(v["version"] for v in evo["version_timeline"]), \
+            f"Version trail has unlabelled entries for {tech_id}"
+        distinct_versions = {v["version"] for v in evo["version_timeline"]}
+        assert len(distinct_versions) >= 2, \
+            f"Expected multiple versions in the trail for {tech_id}, got {distinct_versions}"
+
+    missing = get_technology_evolution("does-not-exist", days=30)
+    assert "error" in missing, "Expected an error for an unknown technology id"
 
     print("\n========================================")
     print("ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!")

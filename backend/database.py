@@ -2,6 +2,7 @@ import sqlite3
 import json
 import os
 from typing import List, Optional, Dict, Any
+from datetime import datetime, timedelta
 from .models import TechEvent, Technology, SourceCitation, WhatChanged, FeedStats
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "techintel.db")
@@ -63,8 +64,57 @@ def init_db():
     )
     """)
 
+    # Small key/value store so the seeder can remember which day it anchored its
+    # generated history to. Without this, re-seeding would append a fresh random
+    # month of events on every boot and inflate the counts.
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS seed_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    )
+    """)
+
     conn.commit()
     conn.close()
+
+def get_seed_meta(key: str) -> Optional[str]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM seed_meta WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row["value"] if row else None
+
+def set_seed_meta(key: str, value: str):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO seed_meta (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        (key, value)
+    )
+    conn.commit()
+    conn.close()
+
+def delete_generated_history() -> int:
+    """Remove previously auto-generated history rows, leaving curated events alone."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM events WHERE id LIKE 'evt-hist-%'")
+    removed = cursor.rowcount or 0
+    conn.commit()
+    conn.close()
+    return removed
+
+def count_generated_history() -> int:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM events WHERE id LIKE 'evt-hist-%'")
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
 
 def row_to_technology(row: sqlite3.Row) -> Technology:
     return Technology(
@@ -161,12 +211,27 @@ def get_all_events(
     event_type: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = 50,
-    offset: int = 0
+    offset: int = 0,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    days: Optional[int] = None
 ) -> List[TechEvent]:
     conn = get_connection()
     cursor = conn.cursor()
     query = "SELECT * FROM events WHERE 1=1"
     params = []
+
+    # `days` is the shorthand for "trailing N days". Explicit bounds win, so a
+    # caller can pass both without the shorthand silently widening the window.
+    if days and not (date_from or date_to):
+        date_from = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M UTC")
+
+    # Accept bare YYYY-MM-DD from callers (e.g. API query params) and widen the
+    # upper bound so a single-day range is inclusive of that whole day.
+    if date_from and len(date_from) == 10:
+        date_from = f"{date_from} 00:00 UTC"
+    if date_to and len(date_to) == 10:
+        date_to = f"{date_to} 23:59 UTC"
 
     if category and category != "All":
         query += " AND category = ?"
@@ -185,7 +250,15 @@ def get_all_events(
         s = f"%{search}%"
         params.extend([s, s, s])
 
-    query += " ORDER BY rowid DESC LIMIT ? OFFSET ?"
+    if date_from:
+        query += " AND verified_at >= ?"
+        params.append(date_from)
+
+    if date_to:
+        query += " AND verified_at <= ?"
+        params.append(date_to)
+
+    query += " ORDER BY verified_at DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
     cursor.execute(query, params)
@@ -202,13 +275,140 @@ def get_event_by_id(event_id: str) -> Optional[TechEvent]:
     conn.close()
     return row_to_event(row) if row else None
 
-def get_events_for_technology(tech_id: str) -> List[TechEvent]:
+def get_events_for_technology(tech_id: str, date_from: Optional[str] = None, date_to: Optional[str] = None) -> List[TechEvent]:
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM events WHERE technology_id = ? ORDER BY rowid DESC", (tech_id,))
+    query = "SELECT * FROM events WHERE technology_id = ?"
+    params = [tech_id]
+
+    if date_from:
+        query += " AND verified_at >= ?"
+        params.append(date_from)
+
+    if date_to:
+        query += " AND verified_at <= ?"
+        params.append(date_to)
+
+    query += " ORDER BY verified_at DESC"
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
     return [row_to_event(r) for r in rows]
+
+def get_technology_evolution(tech_id: str, days: int = 30) -> Dict[str, Any]:
+    """
+    Get a comprehensive evolution timeline for a technology.
+    Returns version history, major milestones, and trend analysis.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Get technology info
+    cursor.execute("SELECT * FROM technologies WHERE id = ?", (tech_id,))
+    tech_row = cursor.fetchone()
+    if not tech_row:
+        conn.close()
+        return {"error": "Technology not found"}
+
+    tech = row_to_technology(tech_row)
+
+    # Get all events for this technology in the past N days
+    date_from = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M UTC")
+    events = get_events_for_technology(tech_id, date_from=date_from)
+
+    # Group events by type and importance
+    version_releases = [e for e in events if e.event_type in ['major_upgrade', 'new_tool', 'ai_model']]
+    feature_updates = [e for e in events if e.event_type == 'feature_update']
+    security_patches = [e for e in events if e.event_type == 'security_patch']
+    pricing_changes = [e for e in events if e.event_type == 'pricing_change']
+    deprecations = [e for e in events if e.event_type == 'deprecation']
+
+    # Build the version trail from every event that actually names a version, not
+    # just the major releases. A patch release is still a point on the upgrade
+    # path, and including it is what makes the trail feel continuous. Events with
+    # no version in the title are skipped rather than shown as "N/A".
+    version_timeline = []
+    for evt in events:
+        version = _extract_version_from_title(evt.title)
+        if not version:
+            continue
+        version_timeline.append({
+            "date": evt.verified_at,
+            "version": version,
+            "title": evt.title,
+            "importance": evt.importance,
+            "summary": evt.summary_tldr,
+            "type": evt.event_type
+        })
+
+    # Oldest -> newest, matching the order the UI stepper renders.
+    version_timeline.sort(key=lambda x: x["date"])
+
+    # Calculate trends
+    total_events = len(events)
+    critical_count = len([e for e in events if e.importance == 'critical'])
+    major_count = len([e for e in events if e.importance == 'major'])
+
+    conn.close()
+
+    return {
+        "technology": {
+            "id": tech.id,
+            "name": tech.name,
+            "current_version": tech.current_version,
+            "category": tech.category
+        },
+        "period_days": days,
+        "summary": {
+            "total_events": total_events,
+            "version_releases": len(version_releases),
+            "feature_updates": len(feature_updates),
+            "security_patches": len(security_patches),
+            "pricing_changes": len(pricing_changes),
+            "critical_events": critical_count,
+            "major_events": major_count
+        },
+        "version_timeline": version_timeline,
+        "recent_events": [
+            {
+                "id": e.id,
+                "date": e.verified_at,
+                "title": e.title,
+                "type": e.event_type,
+                "importance": e.importance,
+                "summary": e.summary_tldr
+            }
+            for e in events[:20]
+        ],
+        "event_breakdown": {
+            "major_upgrade": len(version_releases),
+            "feature_update": len(feature_updates),
+            "security_patch": len(security_patches),
+            "pricing_change": len(pricing_changes),
+            "deprecation": len(deprecations)
+        }
+    }
+
+def _extract_version_from_title(title: str) -> Optional[str]:
+    """
+    Pull a version number out of an event title.
+
+    Returns ``None`` when the title doesn't name a version, so callers can decide
+    whether to include the event. The seeded history embeds versions like
+    "v1.12.1" or "3.13.0" in the title; curated news headlines often don't.
+    """
+    import re
+    # Ordered most-specific first: 1.2.3 before 1.2 before 1.
+    version_patterns = [
+        r'\bv?\d+\.\d+\.\d+(?:-[\w.]+)?',
+        r'\bv?\d+\.\d+\b',
+        r'\bv\d+(?!\.\d)',
+    ]
+    for pattern in version_patterns:
+        match = re.search(pattern, title, re.IGNORECASE)
+        if match:
+            return match.group(0)
+    return None
 
 def insert_or_update_technology(tech: Technology):
     conn = get_connection()
@@ -290,10 +490,27 @@ def get_stats() -> FeedStats:
     res = cursor.fetchone()[0]
     verified_sources = res if res else total_events
 
+    # Time-based counts
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H:%M UTC")
+    week_start = (now - timedelta(days=7)).strftime("%Y-%m-%d %H:%M UTC")
+    month_start = (now - timedelta(days=30)).strftime("%Y-%m-%d %H:%M UTC")
+
+    cursor.execute("SELECT COUNT(*) FROM events WHERE verified_at >= ?", (today_start,))
+    new_today = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM events WHERE verified_at >= ?", (week_start,))
+    new_this_week = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM events WHERE verified_at >= ?", (month_start,))
+    new_this_month = cursor.fetchone()[0]
+
     conn.close()
     return FeedStats(
         total_events=total_events,
-        new_today=total_events,
+        new_today=new_today,
+        new_this_week=new_this_week,
+        new_this_month=new_this_month,
         critical_security_count=critical_security,
         ai_updates_count=ai_updates,
         verified_sources_count=verified_sources,
@@ -510,8 +727,20 @@ def seed_database():
     for tech in sample_technologies:
         insert_or_update_technology(tech)
 
-    # 2. Seed High-Impact Canonical Events with Crystal Clear Explanations for Non-Tech Users
-    sample_events = [
+    # ------------------------------------------------------------------
+    # 2. Current ("today") canonical events — hand-written, high impact.
+    #    Timestamps are generated relative to *now* so the "New in last 24h"
+    #    stat is accurate on any day the project is first run.
+    # ------------------------------------------------------------------
+    _now = datetime.utcnow()
+
+    def _ts(hours_ago: float) -> str:
+        return (datetime.utcnow() - timedelta(hours=hours_ago)).strftime("%Y-%m-%d %H:%M UTC")
+
+    def _pub(hours_ago: float) -> str:
+        return _ts(hours_ago + 0.5)
+
+    current_events = [
         TechEvent(
             id="evt-python-3-13",
             technology_id="python",
@@ -546,7 +775,7 @@ def seed_database():
                     publisher="Python Software Foundation",
                     tier=1,
                     tier_label="Tier 1 - Official Docs",
-                    published_at="2026-09-28 10:00 UTC"
+                    published_at=_pub(5)
                 ),
                 SourceCitation(
                     url="https://github.com/python/cpython/releases/tag/v3.13.0",
@@ -554,7 +783,7 @@ def seed_database():
                     publisher="GitHub CPython Releases",
                     tier=1,
                     tier_label="Tier 1 - GitHub Release",
-                    published_at="2026-09-28 10:15 UTC"
+                    published_at=_pub(4.5)
                 ),
                 SourceCitation(
                     url="https://www.theregister.com/python_313_nogil_release",
@@ -562,10 +791,10 @@ def seed_database():
                     publisher="The Register",
                     tier=2,
                     tier_label="Tier 2 - Technical Press",
-                    published_at="2026-09-28 11:30 UTC"
+                    published_at=_pub(3.5)
                 )
             ],
-            verified_at="2026-09-28 15:10 UTC",
+            verified_at=_ts(0.5),
             is_confirmed=True
         ),
 
@@ -602,7 +831,7 @@ def seed_database():
                     publisher="Gamma Official Blog",
                     tier=1,
                     tier_label="Tier 1 - Official Blog",
-                    published_at="2026-09-28 09:30 UTC"
+                    published_at=_pub(6)
                 ),
                 SourceCitation(
                     url="https://techcrunch.com/gamma-ai-presentation-enterprise-features",
@@ -610,10 +839,10 @@ def seed_database():
                     publisher="TechCrunch",
                     tier=2,
                     tier_label="Tier 2 - Technical Press",
-                    published_at="2026-09-28 11:00 UTC"
+                    published_at=_pub(4)
                 )
             ],
-            verified_at="2026-09-28 14:30 UTC",
+            verified_at=_ts(1),
             is_confirmed=True
         ),
 
@@ -650,7 +879,7 @@ def seed_database():
                     publisher="Qdrant Official Engineering Blog",
                     tier=1,
                     tier_label="Tier 1 - Official Docs",
-                    published_at="2026-09-28 08:00 UTC"
+                    published_at=_pub(7)
                 ),
                 SourceCitation(
                     url="https://venturebeat.com/ai/qdrant-vector-database-memory-breakthrough",
@@ -658,10 +887,10 @@ def seed_database():
                     publisher="VentureBeat",
                     tier=2,
                     tier_label="Tier 2 - Technical Press",
-                    published_at="2026-09-28 09:45 UTC"
+                    published_at=_pub(5.2)
                 )
             ],
-            verified_at="2026-09-28 14:20 UTC",
+            verified_at=_ts(0.8),
             is_confirmed=True
         ),
 
@@ -698,10 +927,10 @@ def seed_database():
                     publisher="Cursor Official Changelog",
                     tier=1,
                     tier_label="Tier 1 - Official Changelog",
-                    published_at="2026-09-28 07:15 UTC"
+                    published_at=_pub(7.8)
                 )
             ],
-            verified_at="2026-09-28 14:50 UTC",
+            verified_at=_ts(1.2),
             is_confirmed=True
         ),
 
@@ -736,7 +965,7 @@ def seed_database():
                     publisher="OpenSSL Security Team",
                     tier=1,
                     tier_label="Tier 1 - Official Advisory",
-                    published_at="2026-09-28 06:00 UTC"
+                    published_at=_pub(9.5)
                 ),
                 SourceCitation(
                     url="https://nvd.nist.gov/vuln/detail/CVE-2026-4819",
@@ -744,16 +973,41 @@ def seed_database():
                     publisher="NIST NVD",
                     tier=1,
                     tier_label="Tier 1 - Official NVD",
-                    published_at="2026-09-28 06:45 UTC"
+                    published_at=_pub(9)
                 )
             ],
-            verified_at="2026-09-28 15:30 UTC",
+            verified_at=_ts(0.2),
             is_confirmed=True
         )
     ]
 
-    for event in sample_events:
+    for event in current_events:
         insert_event(event)
+
+    # ------------------------------------------------------------------
+    # 3. Generate a realistic 30-day history for every tracked technology so
+    #    the dashboard can show version evolution instead of a single day.
+    #
+    #    This must stay idempotent. We remember the day the history was anchored
+    #    to; if the database is still on that day we leave the rows alone, and if
+    #    the day has rolled over we rebuild the month so "past 30 days" keeps
+    #    meaning what it says instead of slowly draining into empty history.
+    # ------------------------------------------------------------------
+    from .seed_history import generate_history_events
+
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    anchored_day = get_seed_meta("history_anchor_day")
+
+    if anchored_day == today and count_generated_history() > 0:
+        # Already seeded for today — nothing to do.
+        pass
+    else:
+        if count_generated_history() > 0:
+            delete_generated_history()
+        for hist_event in generate_history_events(sample_technologies):
+            insert_event(hist_event)
+        set_seed_meta("history_anchor_day", today)
+
 
 # Initialize on import
 init_db()
