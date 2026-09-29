@@ -1,7 +1,9 @@
 # Build the TechIntel Android APK locally.
 #
-# Requires: Android Studio / Android SDK + JDK 17 installed (that's it — no
-# Python, no server). npm only runs the Capacitor sync step.
+# Requires: Android Studio / Android SDK + JDK 21 installed (Capacitor 7's
+# android library is compiled with Java 21; JDK 17 fails with "invalid source
+# release: 21"). That's it — no Python, no server. npm only runs the Capacitor
+# sync step.
 #
 #   powershell -ExecutionPolicy Bypass -File mobile\build_apk.ps1
 #
@@ -17,11 +19,13 @@ Set-Location $mobile
 
 Write-Host "== Installing Capacitor deps (first run only) =="
 if (-not (Test-Path "$mobile\node_modules")) {
-    npm install
+    # .cmd shims: PowerShell would otherwise resolve the npm.ps1 shim and hit
+    # the execution-policy block.
+    npm.cmd install
 }
 
 Write-Host "== Syncing web assets into the Android project =="
-npx cap sync android
+npx.cmd cap sync android
 
 Write-Host "== Building debug APK =="
 Push-Location "$mobile\android"

@@ -308,7 +308,7 @@ installed PWA. Data refresh happens when a new APK is built.
 |-------|-----|
 | **CI build (no local tooling)** | Push to `main` or run the **Build Android APK** workflow → download the `app-debug.apk` from the workflow's **Artifacts** |
 | **Tag → Release** | Push a `v*` tag and the APK is attached to a GitHub Release automatically |
-| **Build it yourself** | Install Android Studio + JDK 17, then `powershell -ExecutionPolicy Bypass -File mobile\build_apk.ps1` → `mobile\TechIntel.apk` |
+| **Build it yourself** | Install Android Studio + JDK 21, then `powershell -ExecutionPolicy Bypass -File mobile\build_apk.ps1` → `mobile\TechIntel.apk` |
 
 Install: copy the APK to the phone → tap it → allow **Install unknown apps**
 for the source. The debug-signed APK is fine for sideloading (no Play Store

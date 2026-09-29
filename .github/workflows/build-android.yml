@@ -19,7 +19,10 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          # Capacitor 7's android library (source/target compatibility) and AGP 8.7
+          # build fine on 21; the library is compiled with JavaVersion.VERSION_21
+          # so 17 fails to compile it ("invalid source release: 21").
+          java-version: "21"
 
       - name: Install Capacitor dependencies
         working-directory: mobile

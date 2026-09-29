@@ -20,7 +20,9 @@ builds a debug-signed APK on free hosted runners:
 
 ## Build it locally
 
-Requires **Android Studio** (or the Android SDK cmdline tools) + **JDK 17**:
+Requires **Android Studio** (or the Android SDK cmdline tools) + **JDK 21**
+(Capacitor 7's Android library is compiled with Java 21 — JDK 17 fails with
+`invalid source release: 21`):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File mobile\build_apk.ps1

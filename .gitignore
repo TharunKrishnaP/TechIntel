@@ -28,6 +28,7 @@ desktop/*.spec
 
 # Mobile (Capacitor) build outputs — keep the android/ project itself committed
 mobile/node_modules/
+mobile/*.apk
 mobile/android/.gradle/
 mobile/android/build/
 mobile/android/app/build/
