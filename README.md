@@ -33,6 +33,43 @@ comes with the offline data snapshot baked in.
 > These links always point at the newest build. Versioned bundles are also
 > attached to every [GitHub Release](https://github.com/TharunKrishnaP/TechIntel/releases).
 
+> **⚠️ Chrome says "TechIntel.exe isn't commonly downloaded" / SmartScreen
+> warns?** That's a reputation notice for any *fresh, unsigned* installer —
+> **not** a malware finding. It fires for brand-new files with no download
+> history. Every build here is produced from this repo's public source, and
+> you can verify the file is exactly the one being distributed by comparing
+> its SHA-256 fingerprint:
+
+<details>
+<summary>🔐 Verify your download — SHA-256 fingerprints</summary>
+
+Full hashes of the current (v1.0.0) builds:
+
+| File | SHA-256 |
+|---|---|
+| `TechIntel.exe` | `5a53ec6427138bcac31505372b5f37d9d61c61a592373281b587dce9f5783dbe` |
+| `TechIntel.apk` | `0d5d32cac26115f9027f2216f2c6138ddd8e1690b3ff60bdcd147f91533f2014` |
+
+Check the file you downloaded and confirm it matches:
+
+```powershell
+# Windows (PowerShell)
+Get-FileHash .\TechIntel.exe -Algorithm SHA256
+certutil -hashfile .\TechIntel.exe SHA256
+```
+
+```bash
+# Linux / macOS
+shasum -a 256 TechIntel.apk
+```
+
+A matching hash means the file is exactly the public build — nothing altered in
+transit. Belt-and-suspenders: build the EXE/APK yourself from source with the
+scripts under [Get the EXE](#get-the-exe) / [Get the APK](#get-the-apk) and
+compare the result.
+
+</details>
+
 ---
 
 ## 🌟 What is TechIntel?
