@@ -43,7 +43,8 @@ comes with the offline data snapshot baked in.
 <details>
 <summary>🔐 Verify your download — SHA-256 fingerprints</summary>
 
-Full hashes of the current (v1.0.0) builds:
+Full hashes of the builds linked above (the newest committed copies — the
+exact bytes the download buttons serve):
 
 | File | SHA-256 |
 |---|---|
@@ -64,7 +65,9 @@ shasum -a 256 TechIntel.apk
 ```
 
 A matching hash means the file is exactly the public build — nothing altered in
-transit. Belt-and-suspenders: build the EXE/APK yourself from source with the
+transit. The GitHub Release carries freshly CI-built copies of the same source,
+so their byte size/hash can differ (fully reproducible via the build scripts
+below). Belt-and-suspenders: build the EXE/APK yourself from source with the
 scripts under [Get the EXE](#get-the-exe) / [Get the APK](#get-the-apk) and
 compare the result.
 

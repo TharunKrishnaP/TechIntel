@@ -67,17 +67,33 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
+      # Publish under a friendly, stable name instead of the Gradle default.
+      - name: Rename APK for release
+        run: cp mobile/android/app/build/outputs/apk/debug/app-debug.apk mobile/android/app/build/outputs/apk/debug/TechIntel.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: TechIntel-Android-APK
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
 
+      # Earlier runs attached the APK under its Gradle name (app-debug.apk).
+      # Drop the stale asset so the release only carries the friendly name.
+      - name: Remove stale app-debug.apk asset
+        if: startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh api "/repos/$GITHUB_REPOSITORY/releases/tags/${GITHUB_REF_NAME}" \
+            --jq '[.assets[] | select(.name=="app-debug.apk") | .id] | join(" ")')
+          for id in $ids; do gh api -X DELETE "/repos/$GITHUB_REPOSITORY/releases/assets/$id" >/dev/null || true; done
+
       - name: Attach to GitHub Release (tags only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          files: mobile/android/app/build/outputs/apk/debug/TechIntel.apk
           # The two build workflows run in parallel on a tag push and both
           # update the same release — allow updating an existing one instead
           # of failing with "already exists".
