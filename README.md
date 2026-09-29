@@ -15,6 +15,26 @@
 
 ---
 
+## 📥 Download the Apps
+
+**Free for everyone — no account, no app store, no setup.** The Windows EXE
+bundles the live backend (double-click and it runs itself); the Android APK
+comes with the offline data snapshot baked in.
+
+<div align="center">
+
+| Platform | Download | How to install |
+|---|---|---|
+| 🖥️ **Windows (EXE)** | [⬇️ TechIntel.exe](https://github.com/TharunKrishnaP/TechIntel/raw/main/downloads/TechIntel.exe) · 24.5 MB | Run the EXE — a native window opens in seconds, nothing else to install |
+| 🤖 **Android (APK)** | [⬇️ TechIntel.apk](https://github.com/TharunKrishnaP/TechIntel/raw/main/downloads/TechIntel.apk) · 4.2 MB | Copy to your phone, tap it, allow **Install unknown apps** for that source |
+
+</div>
+
+> These links always point at the newest build. Versioned bundles are also
+> attached to every [GitHub Release](https://github.com/TharunKrishnaP/TechIntel/releases).
+
+---
+
 ## 🌟 What is TechIntel?
 
 Most tech-news apps just dump articles at you. **TechIntel is different** — it's a *live intelligence platform* that answers two questions every developer and tech enthusiast asks every day:
