@@ -16,6 +16,10 @@ permissions:
 jobs:
   exe:
     runs-on: windows-latest
+    env:
+      # Mirrored from the repo secret so steps can gate on its presence in
+      # `if:` conditions — the `secrets` context is NOT allowed inside `if:`.
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +56,7 @@ jobs:
       # removes the SmartScreen/"not commonly downloaded" warnings. Nothing here
       # changes the unsigned path used today. See docs/CODE-SIGNING.md.
       - name: Upload unsigned EXE for signing
-        if: startsWith(github.ref, 'refs/tags/') && secrets.SIGNPATH_API_TOKEN != ''
+        if: startsWith(github.ref, 'refs/tags/') && env.SIGNPATH_API_TOKEN != ''
         id: upload-unsigned-exe
         uses: actions/upload-artifact@v4
         with:
@@ -60,11 +64,11 @@ jobs:
           path: dist/TechIntel.exe
 
       - name: Sign the EXE via SignPath (free OSS)
-        if: startsWith(github.ref, 'refs/tags/') && secrets.SIGNPATH_API_TOKEN != ''
+        if: startsWith(github.ref, 'refs/tags/') && env.SIGNPATH_API_TOKEN != ''
         id: signpath-sign
         uses: signpath/github-action-submit-signing-request@v3
         with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          api-token: ${{ env.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORG_ID }}
           project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
           signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
@@ -73,7 +77,7 @@ jobs:
           output-artifact-directory: signed
 
       - name: Swap in the signed EXE
-        if: startsWith(github.ref, 'refs/tags/') && secrets.SIGNPATH_API_TOKEN != ''
+        if: startsWith(github.ref, 'refs/tags/') && env.SIGNPATH_API_TOKEN != ''
         run: |
           Copy-Item -Force "signed\TechIntel.exe" "dist\TechIntel.exe"
           Get-ChildItem signed | ForEach-Object { "signed artifact: $($_.Name) $($_.Length) bytes" }
@@ -89,7 +93,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/TechIntel.exe
-          # The two build workflows run in parallel on a tag push and both
-          # update the same release — allow updating an existing one instead
-          # of failing with "already exists".
-          allowUpdates: true
+          # v2 updates an existing release and overwrites duplicate asset
+          # names natively (overwrite_files defaults to true), so the two
+          # parallel tag builds can both update the same release. (The old v1
+          # "allowUpdates" input is gone; it was a no-op.)

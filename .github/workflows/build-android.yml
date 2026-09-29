@@ -98,7 +98,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: mobile/android/app/build/outputs/apk/debug/TechIntel.apk
-          # The two build workflows run in parallel on a tag push and both
-          # update the same release — allow updating an existing one instead
-          # of failing with "already exists".
-          allowUpdates: true
+          # v2 updates an existing release and overwrites duplicate asset
+          # names natively (overwrite_files defaults to true), so the two
+          # parallel tag builds can both update the same release. (The old v1
+          # "allowUpdates" input is gone; it was a no-op.)
