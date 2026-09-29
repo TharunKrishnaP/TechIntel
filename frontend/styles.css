@@ -441,6 +441,29 @@ body {
   animation: spin 0.8s linear infinite;
 }
 
+/* Server connection control — matches the other header pills but keeps an
+   outline so it reads as the "network" action, not a primary sync. */
+.btn-server {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-server:hover {
+  color: var(--text-main);
+  border-color: var(--border);
+  background: var(--bg-card);
+  transform: translateY(-1px);
+}
+
 /* Live Marquee Ticker Bar */
 .live-ticker-bar {
   position: relative;
@@ -2505,5 +2528,141 @@ body {
   .btn-install { padding: 9px 12px; }
   .mode-chip .chip-text { display: none; }
   .mode-chip { padding: 7px 10px; }
+}
+
+/* =========================================================================
+   SERVER CONNECTION DIALOG
+   ========================================================================= */
+.server-field-label {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--text-dim);
+  margin: 12px 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.server-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-input, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.88rem;
+  padding: 11px 13px;
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.server-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+.server-input::placeholder { color: var(--text-dim); }
+.server-help {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  line-height: 1.55;
+  margin: 10px 0 0;
+}
+.server-help code {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 0.72rem;
+}
+.server-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+/* =========================================================================
+   MOBILE SCREEN-FIT — phones and narrow tablets
+   ========================================================================= */
+@media (max-width: 768px) {
+  /* Header: let both halves wrap onto their own row instead of overflowing. */
+  .platform-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .header-left { gap: 12px; flex-wrap: wrap; }
+  .brand-text h1 { font-size: 1.25rem; }
+  .brand-badge { display: none; }
+  .header-right {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .theme-picker-wrapper {
+    width: 100%;
+    order: -1;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 2px 0 4px;
+    scrollbar-width: none;
+  }
+  .theme-picker-wrapper::-webkit-scrollbar { display: none; }
+  .picker-label { display: none; }
+  .nav-container { padding: 0 14px; }
+  .nav-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .tab-btn { flex: 0 0 auto; padding: 8px 13px; gap: 6px; }
+  .tab-btn .tab-sub { display: none; }
+  .tab-btn .tab-icon { font-size: 1.05rem; }
+  .tab-btn .tab-label { font-size: 0.8rem; }
+  .main-container { padding: 14px; }
+  .activity-heatmap-card { margin-left: 0; margin-right: 0; padding: 14px; }
+  .heatmap-track { overflow-x: auto; gap: 3px; padding-bottom: 4px; }
+  .heat-bar-cell { flex: 0 0 22px; }
+  .modal-card {
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: 16px;
+  }
+  .modal-header { padding: 16px 18px; }
+  .modal-body { padding: 18px; }
+  .modal-card-wide { max-width: 100%; }
+  .event-card { padding: 15px; }
+}
+
+@media (max-width: 480px) {
+  .platform-header { padding: 8px 10px; }
+  .main-container { padding: 10px; }
+  .welcome-guide-card { padding: 14px; }
+  .feed-controls-card { padding: 14px; }
+  .events-feed-grid { gap: 14px; }
+  .event-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .badge-row { flex-wrap: wrap; gap: 5px; }
+  .delta-columns { grid-template-columns: 1fr; }
+  .category-filters {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .category-filters::-webkit-scrollbar { display: none; }
+  .compare-table-wrapper { overflow-x: auto; }
+  .directory-grid, .quick-goal-grid { grid-template-columns: 1fr; }
+  .evo-stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .timeline-list { gap: 10px; }
+  .version-trail { overflow-x: auto; }
+  .server-actions .btn-primary,
+  .server-actions .btn-secondary { flex: 1 1 auto; }
+  .btn-refresh span { display: none; }
+  .btn-refresh { padding: 9px 12px; }
 }
 

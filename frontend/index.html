@@ -89,6 +89,13 @@
         <span class="install-text">Install</span>
       </button>
 
+      <!-- Server connection: point this install at a live TechIntel backend
+           (or the bundled snapshot when offline). Especially useful on Android. -->
+      <button class="btn-server" id="btnServer" title="Connect this install to a live TechIntel backend (or review the bundled snapshot)">
+        <span class="chip-icon">🌐</span>
+        <span class="chip-text">Server</span>
+      </button>
+
       <button class="btn-refresh" id="btnRefreshFeed" title="Trigger real-time feed sync">
         <svg class="refresh-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
         <span>Live Radar Sync</span>
@@ -446,6 +453,38 @@
             <h4>🕐 Full Event History <span class="section-hint">(newest first)</span></h4>
             <div class="evolution-timeline" id="evolutionTimeline"></div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Server Connection Modal — lets an install (especially the Android APK)
+       switch from the bundled snapshot to a live TechIntel backend. -->
+  <div class="modal-overlay" id="serverModal" style="display: none;">
+    <div class="modal-card" style="max-width: 500px;">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-badge">🌐 CONNECT</span>
+          <h3>Server Connection</h3>
+        </div>
+        <button class="modal-close" id="btnServerClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="serverStatusText" style="margin: 0 0 16px; font-size: 0.88rem;"></p>
+        <label class="server-field-label" for="serverUrlInput">Server URL</label>
+        <input type="text" id="serverUrlInput" class="server-input"
+               placeholder="http://192.168.1.5:8123  or  https://techintel.example.com"
+               autocomplete="url" spellcheck="false" />
+        <p class="server-help">
+          Point this install at any running TechIntel backend to switch from the
+          bundled snapshot to live data. Tip: on your desktop, launch the app
+          headless with <code>TECHINTEL_PORT=8123 TECHINTEL_NO_BROWSER=1</code> and
+          enter the computer's LAN address here. Leave blank and press connect to
+          clear an old address — or disconnect to go back to offline.
+        </p>
+        <div class="server-actions">
+          <button class="btn-secondary" id="btnServerDisconnect">Use offline snapshot</button>
+          <button class="btn-primary" id="btnServerConnect">Connect</button>
         </div>
       </div>
     </div>

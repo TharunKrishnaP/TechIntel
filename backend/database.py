@@ -104,6 +104,19 @@ def set_seed_meta(key: str, value: str):
     conn.commit()
     conn.close()
 
+def get_last_sync() -> str:
+    """Human-readable timestamp of the last successful feed sync (or seed)."""
+    return get_seed_meta("last_sync_at") or "Not synced yet"
+
+
+def set_last_sync(timestamp: Optional[str] = None):
+    """Record a successful feed sync (or the seed time) for /api/stats."""
+    set_seed_meta(
+        "last_sync_at",
+        timestamp or datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+    )
+
+
 def delete_generated_history() -> int:
     """Remove previously auto-generated history rows, leaving curated events alone."""
     conn = get_connection()
@@ -520,7 +533,7 @@ def get_stats() -> FeedStats:
         critical_security_count=critical_security,
         ai_updates_count=ai_updates,
         verified_sources_count=verified_sources,
-        last_sync="Just now"
+        last_sync=get_last_sync()
     )
 
 def seed_database():

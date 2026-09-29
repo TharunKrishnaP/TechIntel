@@ -24,6 +24,10 @@ from datetime import datetime
 # Allow `python backend/export_static.py` as well as `-m backend.export_static`.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# The static export must be deterministic: keep main's background feed auto-sync
+# loop from firing (and hitting the network) while the snapshot is written.
+os.environ["TECHINTEL_NO_AUTOSYNC"] = "1"
+
 from fastapi.testclient import TestClient  # noqa: E402
 
 from backend.main import app  # noqa: E402

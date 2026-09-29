@@ -20,6 +20,10 @@ const API = (() => {
 
   const DATA_BASE = 'data/';
   const PROBE_TIMEOUT_MS = 1500;
+  // Where the app remembers an explicit backend to talk to ("server URL").
+  // Set via the 🌐 Server dialog or a `?server=` deep link; cleared to revert
+  // to the bundled offline snapshot.
+  const SERVER_STORAGE_KEY = 'techintel_server';
 
   const state = {
     mode: 'static',        // 'live' | 'static'
@@ -28,6 +32,26 @@ const API = (() => {
     base: {},              // static datasets, loaded once
     evoCache: new Map(),
   };
+
+  /** URL of a backend the user explicitly configured, if any (query wins). */
+  function configuredServerUrl() {
+    let chosen = '';
+    try {
+      const fromQuery = (new URLSearchParams(window.location.search).get('server') || '').trim();
+      if (fromQuery) {
+        localStorage.setItem(SERVER_STORAGE_KEY, fromQuery);
+        chosen = fromQuery;
+      } else {
+        chosen = (localStorage.getItem(SERVER_STORAGE_KEY) || '').trim();
+      }
+    } catch (_) { /* localStorage unavailable — live same-origin still works */ }
+    return chosen;
+  }
+
+  /** Clear any configured server (back to the bundled snapshot). */
+  function clearConfiguredServer() {
+    try { localStorage.removeItem(SERVER_STORAGE_KEY); } catch (_) { /* ignore */ }
+  }
 
   // -------------------------------------------------------------------------
   // Static helpers
@@ -94,10 +118,12 @@ const API = (() => {
   // -------------------------------------------------------------------------
 
   async function probe() {
-    // In live mode the caller may have set an explicit server URL.
+    // Candidates, most specific first: an explicitly configured server URL
+    // (entered in the 🌐 Server dialog or ?server= deep link), then same-origin.
     const candidates = [];
-    if (state.baseUrl) candidates.push(state.baseUrl.replace(/\/$/, ''));
-    else candidates.push(''); // same-origin
+    const configured = configuredServerUrl();
+    if (configured) candidates.push(configured.replace(/\/+$/, ''));
+    candidates.push(''); // same-origin
 
     for (const base of candidates) {
       try {
@@ -121,20 +147,51 @@ const API = (() => {
     return 'static';
   }
 
+  /** Build a (up-to) 30-day activity series from the event list. */
+  function buildHeatmapFromEvents(events) {
+    if (!events || !events.length) return { days: 0, series: [], peak: 0 };
+    const counts = {};
+    for (const e of events) {
+      const day = (e.verified_at || '').slice(0, 10);
+      if (day.length !== 10) continue;
+      counts[day] = (counts[day] || 0) + 1;
+    }
+    const days = Object.keys(counts).sort();
+    const first = days[0];
+    const last = days[days.length - 1];
+    const series = [];
+    const cursor = new Date(first + 'T00:00:00Z');
+    const lastTime = new Date(last + 'T00:00:00Z');
+    while (cursor <= lastTime && series.length <= 30) {
+      const key = cursor.toISOString().slice(0, 10);
+      series.push({ date: key, count: counts[key] || 0 });
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return { days: series.length, series, peak: series.reduce((m, p) => Math.max(m, p.count), 0) };
+  }
+
   async function loadStatic() {
     const get = async (file) => {
       const res = await fetch(DATA_BASE + file);
       if (!res.ok) throw new Error(`missing data/${file}`);
       return res.json();
     };
-    const [events, tools, stats, timeline, build] = await Promise.all([
-      get('events.json'),
-      get('tools.json'),
-      get('stats.json'),
-      get('timeline.json'),
-      get('build.json').catch(() => null),
-    ]);
-    state.base = { events, tools, stats, timeline, build };
+    // Resilient loading: only tools.json is baked into the SW precache list as
+    // essential, but the app should *never* show a blank screen just because one
+    // optional snapshot file is missing on a device — derive what we can.
+    let events = [], tools = [], stats = null, timeline = null, build = null;
+    try { events = await get('events.json'); } catch (_) { events = []; }
+    try { tools = await get('tools.json'); } catch (_) { tools = []; }
+    try { build = await get('build.json'); } catch (_) { build = null; }
+    try { timeline = await get('timeline.json'); } catch (_) { timeline = null; }
+    try { stats = await get('stats.json'); } catch (_) { stats = null; }
+    state.base = {
+      events,
+      tools,
+      stats: stats || computeStats(events),
+      timeline: timeline || buildHeatmapFromEvents(events),
+      build,
+    };
     return state.base;
   }
 
@@ -146,6 +203,12 @@ const API = (() => {
     get mode() { return state.mode; },
     get isLive() { return state.mode === 'live'; },
     get buildInfo() { return state.base.build; },
+    // For the 🌐 Server dialog: the URL the user configured (if any) and the
+    // URL live mode actually talks to. `server` is '' when running same-origin
+    // (e.g. desktop EXE), `configured` stays '' when using the snapshot.
+    get configured() { return configuredServerUrl(); },
+    get server() { return state.baseUrl || ''; },
+    clearServer() { clearConfiguredServer(); },
 
     async init() {
       const mode = await probe();
@@ -182,6 +245,14 @@ const API = (() => {
       if (days && !from && !to) from = stampForDaysAgo(days);
 
       let rows = state.base.events || [];
+      // Aging-snapshot guard: time-based windows are computed against "now",
+      // so a snapshot that is older than the requested window would otherwise
+      // render as an empty feed. If the whole bundle predates the window, widen
+      // the window to the bundle's oldest event instead of showing nothing.
+      if (from && rows.length) {
+        const oldest = rows.reduce((m, e) => (e.verified_at < m ? e.verified_at : m), rows[0].verified_at);
+        if (from > oldest) from = oldest;
+      }
       if (from) rows = rows.filter((e) => e.verified_at >= from);
       if (to) rows = rows.filter((e) => e.verified_at <= to);
       rows = rows.slice().sort((a, b) => (a.verified_at < b.verified_at ? 1 : a.verified_at > b.verified_at ? -1 : 0));
@@ -227,8 +298,13 @@ const API = (() => {
       let from = toStamp(dateFrom);
       let to = stampEndOfDay(dateTo);
       if (days && !from && !to) from = stampForDaysAgo(days);
-      return (state.base.events || [])
-        .filter((e) => e.technology_id === toolId)
+      const rows = (state.base.events || [])
+        .filter((e) => e.technology_id === toolId);
+      const oldest = rows.length
+        ? rows.reduce((m, e) => (e.verified_at < m ? e.verified_at : m), rows[0].verified_at)
+        : null;
+      if (from && oldest && from > oldest) from = oldest;
+      return rows
         .filter((e) => (!from || e.verified_at >= from) && (!to || e.verified_at <= to));
     },
 

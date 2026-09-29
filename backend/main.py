@@ -1,11 +1,14 @@
 import os
 import asyncio
+import logging
 from typing import Optional, List
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Query, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+
+logger = logging.getLogger(__name__)
 
 from .models import (
     TechEvent, Technology, RecommendationRequest,
@@ -15,13 +18,40 @@ from .models import (
 from .database import (
     get_all_events, get_event_by_id, get_events_for_technology,
     get_all_technologies, get_technology_by_id, get_stats, seed_database,
-    get_technology_evolution
+    get_technology_evolution, set_last_sync
 )
 from .services.matcher import (
     match_tools_for_purpose, generate_comparison_matrix, find_alternatives_for_tool
 )
-from .pipeline.ingestion import sync_all_feeds
+from .pipeline.ingestion import sync_all_feeds_safely
 from .app_paths import get_frontend_dir
+
+# Live-feed auto-sync: while the desktop app is running, the backend re-polls
+# the public RSS/release feeds every N minutes so the dashboard genuinely
+# updates in real time instead of only when the user clicks "Live Radar Sync".
+# Disable with TECHINTEL_NO_AUTOSYNC=1 (used by export_static / tests).
+SYNC_INTERVAL_SECONDS = int(os.environ.get("TECHINTEL_SYNC_INTERVAL_MIN", "15")) * 60
+AUTOSYNC_DISABLED = os.environ.get("TECHINTEL_NO_AUTOSYNC") == "1"
+
+
+async def _run_background_sync():
+    try:
+        new_count = await sync_all_feeds_safely()
+        if new_count:
+            logger.info("background feed sync ingested %s new event(s)", new_count)
+        set_last_sync()
+    except Exception:  # never let a feed hiccup kill the loop
+        logger.exception("background feed sync failed")
+
+
+async def _background_sync_loop():
+    # First poll a few seconds after startup so the dashboard becomes live
+    # shortly after launch without delaying the first paint, then every interval.
+    await asyncio.sleep(8)
+    await _run_background_sync()
+    while True:
+        await asyncio.sleep(SYNC_INTERVAL_SECONDS)
+        await _run_background_sync()
 
 app = FastAPI(
     title="TechIntel - Live Technology Intelligence Platform",
@@ -44,6 +74,11 @@ FRONTEND_DIR = get_frontend_dir()
 @app.on_event("startup")
 async def startup_event():
     seed_database()
+    # Mark the seed time so the header never reads "Not synced yet" on first run;
+    # real feed syncs update it with actual timestamps afterwards.
+    set_last_sync()
+    if not AUTOSYNC_DISABLED:
+        asyncio.get_running_loop().create_task(_background_sync_loop())
 
 @app.get("/api/health")
 async def health_check():
@@ -176,8 +211,10 @@ async def api_compare_tools(req: ComparisonRequest):
 
 @app.post("/api/refresh-feed")
 async def api_refresh_feed(background_tasks: BackgroundTasks):
-    # Run sync in background or immediately
-    new_count = await sync_all_feeds()
+    # The lock inside sync_all_feeds_safely means a manual sync and the
+    # background loop can never run concurrently.
+    new_count = await sync_all_feeds_safely()
+    set_last_sync()
     return {"status": "success", "new_events_ingested": new_count}
 
 # Mount static frontend

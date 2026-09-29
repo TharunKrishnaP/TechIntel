@@ -104,7 +104,16 @@ const elements = {
 
   // PWA
   btnInstall: document.getElementById('btnInstall'),
-  modeChip: document.getElementById('modeChip')
+  modeChip: document.getElementById('modeChip'),
+
+  // Server connection dialog
+  btnServer: document.getElementById('btnServer'),
+  serverModal: document.getElementById('serverModal'),
+  serverStatusText: document.getElementById('serverStatusText'),
+  serverUrlInput: document.getElementById('serverUrlInput'),
+  btnServerConnect: document.getElementById('btnServerConnect'),
+  btnServerDisconnect: document.getElementById('btnServerDisconnect'),
+  btnServerClose: document.getElementById('btnServerClose')
 };
 
 // ---------------------------------------------------------------------------
@@ -173,8 +182,23 @@ function renderDataSourceChip() {
     const build = API.buildInfo;
     elements.modeChip.hidden = false;
     elements.modeChip.title = build && build.generated_at
-      ? `No server detected — showing the snapshot bundled at build time (${build.generated_at}).`
-      : 'No server detected — showing the bundled offline snapshot.';
+      ? `Showing the snapshot bundled at build time (${build.generated_at}). Use the 🌐 Server button in the header to connect a live backend.`
+      : 'Showing the bundled offline snapshot. Use the 🌐 Server button in the header to connect a live backend.';
+  }
+}
+
+/** Status line inside the 🌐 Server dialog. */
+function updateServerStatus() {
+  if (!elements.serverStatusText) return;
+  if (API.isLive) {
+    const where = API.server ? ` (${API.server})` : ' (same origin)';
+    elements.serverStatusText.textContent =
+      `✓ Connected to a live TechIntel backend${where}. Data refreshes automatically.`;
+    elements.serverStatusText.style.color = 'var(--accent-emerald)';
+  } else {
+    elements.serverStatusText.textContent =
+      '📦 No server detected — showing the bundled offline snapshot. Connect to a TechIntel backend below to go live.';
+    elements.serverStatusText.style.color = '';
   }
 }
 
@@ -196,9 +220,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.error('Data adapter failed to initialise:', err);
   }
   renderDataSourceChip();
+  updateServerStatus();
 
   await Promise.all([fetchStats(), fetchEvents(), fetchTechnologies(), fetchTimeline()]);
+  startAutoRefresh();
 });
+
+/**
+ * Live-mode auto-refresh: while the dashboard is open and a backend is
+ * reachable, silently re-poll stats/feed/timeline every minute so new events
+ * appear on the page without touching anything. Static/snapshot mode polls
+ * nothing (there is no server to ask).
+ */
+let autoRefreshTimer = null;
+
+function startAutoRefresh() {
+  if (!API.isLive || autoRefreshTimer) return;
+  const INTERVAL_MS = 60000;
+  autoRefreshTimer = setInterval(async () => {
+    // Don't churn in a background tab; the interval will pick up when visible.
+    if (document.hidden) return;
+    const results = await Promise.allSettled([
+      fetchStats(),
+      fetchEvents(true),  // silent — no spinner, no scroll jump
+      fetchTimeline(),
+    ]);
+    for (const r of results) {
+      if (r.status === 'rejected') console.error('Auto-refresh step failed:', r.reason);
+    }
+  }, INTERVAL_MS);
+}
 
 // Interactive 3D Cyber-Radar Canvas with Perspective Grid & Particles
 function initCyberRadarCanvas() {
@@ -495,7 +546,7 @@ function setupEventListeners() {
   // mode the adapter reports it as unsupported, so explain rather than fail silently.
   elements.btnRefreshFeed.addEventListener('click', async () => {
     if (!API.refreshSupported) {
-      setFeedSummary('This install is running from a bundled snapshot, so there is no server to sync. Run the backend to pull live feeds.', true);
+      setFeedSummary('This install is running from a bundled snapshot, so there is no server to sync. Use the 🌐 Server button in the header to connect a live backend.', true);
       return;
     }
     elements.btnRefreshFeed.classList.add('loading');
@@ -521,6 +572,52 @@ function setupEventListeners() {
       const { outcome } = await state.installPrompt.userChoice;
       if (outcome === 'accepted') hideInstallButton();
       state.installPrompt = null;
+    });
+  }
+
+  // Server connection dialog — lets an install (notably the Android APK) point
+  // at a live TechIntel backend instead of the bundled snapshot.
+  if (elements.btnServer) {
+    elements.btnServer.addEventListener('click', () => {
+      elements.serverUrlInput.value = API.configured || '';
+      updateServerStatus();
+      elements.serverModal.style.display = 'flex';
+      setTimeout(() => elements.serverUrlInput.focus(), 50);
+    });
+  }
+  if (elements.btnServerConnect) {
+    elements.btnServerConnect.addEventListener('click', () => {
+      let url = elements.serverUrlInput.value.trim().replace(/\/+$/, '');
+      if (!url) {
+        setFeedSummary('Enter a server URL first (e.g. http://192.168.1.5:8123).', true);
+        return;
+      }
+      if (!/^https?:\/\//i.test(url)) url = 'http://' + url;
+      try {
+        localStorage.setItem('techintel_server', url);
+        location.reload();
+      } catch (_) {
+        setFeedSummary('Could not save the server URL (storage unavailable).', true);
+      }
+    });
+  }
+  if (elements.btnServerDisconnect) {
+    elements.btnServerDisconnect.addEventListener('click', () => {
+      API.clearServer();
+      location.reload();
+    });
+  }
+  if (elements.btnServerClose) {
+    elements.btnServerClose.addEventListener('click', () => {
+      elements.serverModal.style.display = 'none';
+    });
+  }
+  if (elements.serverModal) {
+    window.addEventListener('click', (e) => {
+      if (e.target === elements.serverModal) elements.serverModal.style.display = 'none';
+    });
+    elements.serverUrlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && elements.btnServerConnect) elements.btnServerConnect.click();
     });
   }
 
@@ -643,20 +740,29 @@ function setFeedSummary(text, isWarning = false) {
   if (elements.summarySpinner) elements.summarySpinner.style.display = 'none';
 }
 
-// Fetch Events (live backend or bundled snapshot), honouring the time window
-async function fetchEvents() {
-  if (elements.summarySpinner) elements.summarySpinner.style.display = 'inline-block';
-  setFeedSummary('Loading feed…');
+// Fetch Events (live backend or bundled snapshot), honouring the time window.
+// `silent` is used by the auto-refresh timer: re-fetch and re-render only when
+// the data actually changed, so an idle page never flashes or jumps.
+async function fetchEvents(silent = false) {
+  if (!silent) {
+    if (elements.summarySpinner) elements.summarySpinner.style.display = 'inline-block';
+    setFeedSummary('Loading feed…');
+  }
   try {
     const events = await API.getFeed({ ...buildTimeWindowParams(), limit: 100 });
     if (!Array.isArray(events)) throw new Error('Feed request failed');
+    if (silent) {
+      const sig = (arr) => (arr.length ? `${arr.length}|${arr[0].verified_at}|${arr[0].title}` : '0|');
+      if (sig(events) === sig(state.events)) return; // nothing changed — keep the current render
+    }
     state.events = events;
     renderEvents();
   } catch (err) {
     console.error("Error fetching events:", err);
+    if (silent) return;
     const hint = API.isLive
       ? 'Could not reach the backend.'
-      : 'Could not load the bundled data. Re-run <code>python -m backend.export_static</code>.';
+      : 'Could not load the bundled data. Re-run <code>python -m backend.export_static</code>, or use the 🌐 Server button to connect a backend.';
     elements.eventsContainer.innerHTML = `<div class="empty-state"><p>${hint}</p></div>`;
     setFeedSummary('Failed to load the feed.', true);
   }

@@ -14,7 +14,7 @@
  * release that changes the shell.
  */
 
-const TECHINTEL_VERSION = 'v2';
+const TECHINTEL_VERSION = 'v3';
 const SHELL_CACHE = `techintel-shell-${TECHINTEL_VERSION}`;
 const DATA_CACHE = `techintel-data-${TECHINTEL_VERSION}`;
 

@@ -18,15 +18,17 @@
 ## 📥 Download the Apps
 
 **Free for everyone — no account, no app store, no setup.** The Windows EXE
-bundles the live backend (double-click and it runs itself); the Android APK
-comes with the offline data snapshot baked in.
+bundles the live backend (double-click and it runs itself — the dashboard
+auto-refreshes against live RSS/release feeds every minute); the Android APK
+ships with the offline data snapshot baked in and can be pointed at any live
+TechIntel backend (or your desktop) via the 🌐 Server button.
 
 <div align="center">
 
 | Platform | Download | How to install |
 |---|---|---|
-| 🖥️ **Windows (EXE)** | [⬇️ TechIntel.exe](https://github.com/TharunKrishnaP/TechIntel/raw/main/downloads/TechIntel.exe) · 24.5 MB | Run the EXE — a native window opens in seconds, nothing else to install |
-| 🤖 **Android (APK)** | [⬇️ TechIntel.apk](https://github.com/TharunKrishnaP/TechIntel/raw/main/downloads/TechIntel.apk) · 4.2 MB | Copy to your phone, tap it, allow **Install unknown apps** for that source |
+| 🖥️ **Windows (EXE)** | [⬇️ TechIntel.exe](https://github.com/TharunKrishnaP/TechIntel/raw/main/downloads/TechIntel.exe) · 26.0 MB | Run the EXE — a native window opens in seconds, nothing else to install |
+| 🤖 **Android (APK)** | [⬇️ TechIntel.apk](https://github.com/TharunKrishnaP/TechIntel/raw/main/downloads/TechIntel.apk) · 4.3 MB | Copy to your phone, tap it, allow **Install unknown apps** for that source |
 
 </div>
 
@@ -68,8 +70,8 @@ exact bytes the download buttons serve):
 
 | File | SHA-256 |
 |---|---|
-| `TechIntel.exe` | `5a53ec6427138bcac31505372b5f37d9d61c61a592373281b587dce9f5783dbe` |
-| `TechIntel.apk` | `0d5d32cac26115f9027f2216f2c6138ddd8e1690b3ff60bdcd147f91533f2014` |
+| `TechIntel.exe` | `387173fa64002f569884c4be4d1874d0870407def006991c45b078d698e41ea5` |
+| `TechIntel.apk` | `ebde71ff835375451ff08600ecf4d0873207138f15cb2ae52db1f9f5dc55fcd9` |
 
 Check the file you downloaded and confirm it matches:
 
@@ -356,6 +358,10 @@ Node, no CLI).
   starts it on `127.0.0.1` on a free port, then opens the dashboard in a native
   window (Edge WebView2) or the default browser. The UI runs in **live mode**
   against the local `/api/*` endpoints.
+- **Updates in real time.** While it's open, the backend re-polls the public
+  RSS/release feeds every 15 minutes and the dashboard automatically re-fetches
+  every minute — new events appear on the page without you doing anything (the
+  **Live Radar Sync** button is still there for an instant manual pull).
 - **First run is automatic.** A fresh database is seeded on launch into
   `%LOCALAPPDATA%\TechIntel\techintel.db` — nothing to configure.
 - **Still works offline.** The bundled PWA snapshot (`frontend/data/`) is the
@@ -381,7 +387,15 @@ anyway** (it's built from this public repo).
 
 A native Android app (Capacitor WebView) with the **offline snapshot baked
 in** — it opens instantly with no network and no server, exactly like the
-installed PWA. Data refresh happens when a new APK is built.
+installed PWA. It also renders full-width on phone screens, and you can go
+live at any time: open the **🌐 Server** button in the header and enter a
+TechIntel backend's URL (see the tip below) — the app then polls that backend
+just like the desktop build does.
+
+> **Tip — point the APK at your desktop:** launch the EXE headless on your
+> computer with `TECHINTEL_PORT=8123 TECHINTEL_NO_BROWSER=1`, note its LAN
+> IP (`ipconfig`), then enter `http://<that-ip>:8123` in the APK's 🌐 Server
+> dialog. The phone talks to the backend on the same network.
 
 ### Get the APK
 

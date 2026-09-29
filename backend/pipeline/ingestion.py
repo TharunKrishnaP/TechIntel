@@ -194,3 +194,19 @@ async def sync_all_feeds() -> int:
         new_events_count += 1
 
     return new_events_count
+
+
+# ---------------------------------------------------------------------------
+# Concurrency guard
+# ---------------------------------------------------------------------------
+# The manual "Live Radar Sync" button and the background auto-sync loop can
+# both trigger sync_all_feeds(). A process-wide lock keeps them from racing
+# (each would otherwise fetch + insert independently, risking duplicate
+# inserts and wasted feed polls).
+_sync_lock = asyncio.Lock()
+
+
+async def sync_all_feeds_safely() -> int:
+    """Run sync_all_feeds() under a lock; safe to call from multiple entry points."""
+    async with _sync_lock:
+        return await sync_all_feeds()
