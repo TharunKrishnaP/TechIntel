@@ -79,18 +79,33 @@ jobs:
 
       # Earlier runs attached the APK under its Gradle name (app-debug.apk).
       # Drop the stale asset so the release only carries the friendly name.
+      # Uses the releases LIST endpoint rather than releases/tags/{tag},
+      # because a just-recreated tag can briefly 404 the by-tag lookup
+      # (observed after force-moving the tag), while the list endpoint
+      # returns releases regardless of tag linkage.
       - name: Remove stale app-debug.apk asset
         if: startsWith(github.ref, 'refs/tags/')
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          url="/repos/$GITHUB_REPOSITORY/releases/tags/${GITHUB_REF_NAME}"
+          url="/repos/$GITHUB_REPOSITORY/releases?per_page=100"
           n=0
-          for id in $(gh api "$url" --jq '.assets[] | select(.name=="app-debug.apk") | .id'); do
-            echo "deleting stale asset $id"
-            gh api --method DELETE "/repos/$GITHUB_REPOSITORY/releases/assets/$id" && n=$((n+1))
+          rel_id=""
+          for attempt in $(seq 1 5); do
+            rel_id=$(gh api "$url" --jq ".[] | select(.tag_name==\"${GITHUB_REF_NAME}\") | .id" | head -n1)
+            if [ -n "$rel_id" ]; then break; fi
+            echo "release lookup attempt ${attempt} returned nothing; retrying..."
+            sleep 4
           done
+          if [ -z "$rel_id" ]; then
+            echo "no release found for tag ${GITHUB_REF_NAME}; skipping stale-asset cleanup"
+          else
+            for id in $(gh api "/repos/$GITHUB_REPOSITORY/releases/${rel_id}/assets" --jq '.[] | select(.name=="app-debug.apk") | .id'); do
+              echo "deleting stale asset $id"
+              gh api --method DELETE "/repos/$GITHUB_REPOSITORY/releases/assets/$id" && n=$((n+1))
+            done
+          fi
           echo "removed $n stale asset(s)"
 
       - name: Attach to GitHub Release (tags only)
