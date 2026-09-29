@@ -85,9 +85,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ids=$(gh api "/repos/$GITHUB_REPOSITORY/releases/tags/${GITHUB_REF_NAME}" \
-            --jq '[.assets[] | select(.name=="app-debug.apk") | .id] | join(" ")')
-          for id in $ids; do gh api -X DELETE "/repos/$GITHUB_REPOSITORY/releases/assets/$id" >/dev/null || true; done
+          url="/repos/$GITHUB_REPOSITORY/releases/tags/${GITHUB_REF_NAME}"
+          n=0
+          for id in $(gh api "$url" --jq '.assets[] | select(.name=="app-debug.apk") | .id'); do
+            echo "deleting stale asset $id"
+            gh api --method DELETE "/repos/$GITHUB_REPOSITORY/releases/assets/$id" && n=$((n+1))
+          done
+          echo "removed $n stale asset(s)"
 
       - name: Attach to GitHub Release (tags only)
         if: startsWith(github.ref, 'refs/tags/')
