@@ -30,15 +30,34 @@ comes with the offline data snapshot baked in.
 
 </div>
 
-> These links always point at the newest build. Versioned bundles are also
-> attached to every [GitHub Release](https://github.com/TharunKrishnaP/TechIntel/releases).
+> These links always point at the newest build. The same files are also on the
+> [GitHub Release `v1.0.0`](https://github.com/TharunKrishnaP/TechIntel/releases)
+> ([EXE · 28.3 MB](https://github.com/TharunKrishnaP/TechIntel/releases/download/v1.0.0/TechIntel.exe)
+> / [APK · 4.4 MB](https://github.com/TharunKrishnaP/TechIntel/releases/download/v1.0.0/TechIntel.apk))
+> if you prefer the release host.
 
-> **⚠️ Chrome says "TechIntel.exe isn't commonly downloaded" / SmartScreen
-> warns?** That's a reputation notice for any *fresh, unsigned* installer —
-> **not** a malware finding. It fires for brand-new files with no download
-> history. Every build here is produced from this repo's public source, and
-> you can verify the file is exactly the one being distributed by comparing
-> its SHA-256 fingerprint:
+#### 🍀 First run: what the browser/Windows warnings mean (and exact clicks)
+
+You will likely see **"TechIntel.exe isn't commonly downloaded"** (Chrome) and/or
+a **Windows SmartScreen** prompt. These are **reputation notices for new,
+unsigned installers — they are *not* virus detections**. TechIntel is built
+from this public repo, and every build is byte-verifiable (see the checksums
+below). Here's exactly how to proceed:
+
+1. **Chrome / Edge** — the download may be paused behind the warning:
+   click **"Keep"** (Chrome) or the **"…" → Keep** menu (Edge). The file stays.
+2. **Windows SmartScreen** — if prompted *"Windows protected your PC"*:
+   click **More info → Run anyway**. (This is the standard path for any
+   unsigned open-source installer.)
+3. **Verify before running (recommended):** compare the file's SHA-256 with
+   the fingerprints below — a match proves it's exactly the public build.
+4. The EXE then opens a native window in ~3 seconds with the live backend
+   inside; the APK installs normally on Android.
+
+> The warning typically fades on its own as more people download the file
+> (reputation grows with usage). If you want it gone permanently, we can add
+> real code-signing — see
+> [docs/CODE-SIGNING.md](docs/CODE-SIGNING.md) for the ready-to-use setup.
 
 <details>
 <summary>🔐 Verify your download — SHA-256 fingerprints</summary>
