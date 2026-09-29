@@ -56,8 +56,9 @@ below). Here's exactly how to proceed:
 
 > The warning typically fades on its own as more people download the file
 > (reputation grows with usage). If you want it gone permanently, we can add
-> real code-signing — see
-> [docs/CODE-SIGNING.md](docs/CODE-SIGNING.md) for the ready-to-use setup.
+> real code-signing — the pipeline is already wired for the free
+> [SignPath Foundation](docs/SIGNPATH-ONBOARDING.md) route, or see
+> [docs/CODE-SIGNING.md](docs/CODE-SIGNING.md) for all options.
 
 <details>
 <summary>🔐 Verify your download — SHA-256 fingerprints</summary>

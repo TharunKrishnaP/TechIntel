@@ -26,10 +26,16 @@ binary was built by your public GitHub Actions workflow from your repository,
 and the resulting signature is from a CA-trusted certificate (issued in
 SignPath Foundation's name — that's what vouches for the repo→binary link).
 
+> **Fastest path:** the repo is ready; only the one-time signup needs a human.
+> Use the 15-minute copy-paste runbook in
+> **[SIGNPATH-ONBOARDING.md](SIGNPATH-ONBOARDING.md)** — pre-filled
+> application answers, the 4 secrets to add, and the verification checklist.
+
 ### 1. Apply (one-time, ~1–5 days)
 
-1. Go to the [SignPath Open Source Community page](https://signpath.io/solutions/open-source-community)
-   and apply with your project info (repo URL, MIT license, description).
+1. Go to the [SignPath Foundation application form](https://signpath.org/apply)
+   ("Apply for a free SignPath.io subscription") and submit your project info —
+   see the pre-filled answers in [SIGNPATH-ONBOARDING.md](SIGNPATH-ONBOARDING.md).
 2. They'll create a **SignPath Foundation organization** for you with:
    - `organization-id`
    - a **project** (slug) linked to this GitHub repo
