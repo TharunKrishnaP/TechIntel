@@ -307,6 +307,7 @@ Node, no CLI).
 
 | Route | How |
 |-------|-----|
+| **⬇️ Direct download** | Grab [TechIntel.exe](https://github.com/TharunKrishnaP/TechIntel/raw/main/downloads/TechIntel.exe) right from this repo — always the newest build |
 | **CI build (no local tooling)** | Push to `main` or run the **Build Desktop EXE** workflow → download `TechIntel.exe` from the workflow's **Artifacts** |
 | **Tag → Release** | Push a `v*` tag and the EXE is attached to a GitHub Release automatically |
 | **Build it yourself** | `powershell -ExecutionPolicy Bypass -File desktop\build_exe.ps1` → `dist\TechIntel.exe` |
@@ -326,6 +327,7 @@ installed PWA. Data refresh happens when a new APK is built.
 
 | Route | How |
 |-------|-----|
+| **⬇️ Direct download** | Grab [TechIntel.apk](https://github.com/TharunKrishnaP/TechIntel/raw/main/downloads/TechIntel.apk) right from this repo — always the newest build |
 | **CI build (no local tooling)** | Push to `main` or run the **Build Android APK** workflow → download the `app-debug.apk` from the workflow's **Artifacts** |
 | **Tag → Release** | Push a `v*` tag and the APK is attached to a GitHub Release automatically |
 | **Build it yourself** | Install Android Studio + JDK 21, then `powershell -ExecutionPolicy Bypass -File mobile\build_apk.ps1` → `mobile\TechIntel.apk` |
