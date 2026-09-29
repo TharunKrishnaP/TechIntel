@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Needed so the "Attach to GitHub Release" step can create/update releases
+# and upload assets (the repo's default GITHUB_TOKEN is read-only).
+permissions:
+  contents: write
+
 jobs:
   exe:
     runs-on: windows-latest
@@ -49,3 +54,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/TechIntel.exe
+          # The two build workflows run in parallel on a tag push and both
+          # update the same release — allow updating an existing one instead
+          # of failing with "already exists".
+          allowUpdates: true
