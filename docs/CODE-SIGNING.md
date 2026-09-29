@@ -2,101 +2,134 @@
 
 **TL;DR:** Chrome's *"TechIntel.exe isn't commonly downloaded"* and Windows
 SmartScreen prompts are **reputation notices**, not malware findings. They
-appear for any new **unsigned** installer. There are exactly two ways to make
-them disappear:
+appear for any new **unsigned** installer. The only real cure is signing the
+EXE with a certificate from a CA in Microsoft's Authenticode trust chain.
 
-1. **Sign the EXE with a certificate trusted by Microsoft / Chrome**
-   (the only real fix), or
-2. **Let the file build reputation** — the warning fades as more people
-   download and run the file (takes time and usage, nothing to do).
+The good news: **free, CI-automatable signing exists** (SignPath Foundation's
+Open Source program) and the repository is already wired for it — see
+["Option A"](#option-a--signpath-foundation-oss--free-recommended). It becomes
+active the moment four secrets are added; nothing about the current builds
+changes until then.
 
-The APK is unaffected by this: Android installs use the APK's own debug
-signature (verified with `apksigner`), and phones only show a one-time
-"allow unknown apps" prompt.
+The APK is unaffected: it ships with a valid Android debug signature
+(verified with `apksigner`), and the one-time "allow unknown apps" prompt on
+the phone is normal sideloading behavior.
 
 ---
 
-## Option A — Azure Trusted Signing (recommended, ~$10/month)
+## Option A — SignPath Foundation OSS (free, recommended)
 
-Microsoft's cloud code-signing service. Certificates are already trusted by
-Windows/Chrome (SHA-2, EV-grade trust), no hardware token needed, and it
-integrates natively with GitHub Actions. You need an **Azure subscription**.
+SignPath ([signpath.io](https://signpath.io) /
+[signpath.org](https://signpath.org)) provides **free code signing for
+open-source projects**: your private key lives on their HSM, they verify the
+binary was built by your public GitHub Actions workflow from your repository,
+and the resulting signature is from a CA-trusted certificate (issued in
+SignPath Foundation's name — that's what vouches for the repo→binary link).
 
-1. Create a **Trusted Signing** resource (Azure portal).
-   - Identity validation: **Public (Microsoft) Trusted Test Certificate Signing**
-     for testing, or **Public (Microsoft) Trusted Certificate Signing**
-     (DVS validation, ~1 day) for production trust.
-   - User prompts: >95%.
-2. Create a **certificate profile** (e.g. `techintel-release`).
-3. Set up **Azure AD app registration** + client credentials (Client ID /
-   Tenant ID / Certificates & secrets) used by the GitHub Actions action.
-4. Add these secrets to the repo:
-   - `AZURE_TENANT_ID`
-   - `AZURE_CLIENT_ID`
-   - `AZURE_CLIENT_CERTIFICATE` (the base64 of the client certificate)
-   - `AZURE_TRUSTED_SIGNING_ACCOUNT` (resource name)
-   - `AZURE_TRUSTED_SIGNING_CERT_PROFILE`
-5. Uncomment the signing step in `.github/workflows/build-desktop.yml` (shown
-   below); push a new tag → CI signs the EXE → warning gone.
+### 1. Apply (one-time, ~1–5 days)
+
+1. Go to the [SignPath Open Source Community page](https://signpath.io/solutions/open-source-community)
+   and apply with your project info (repo URL, MIT license, description).
+2. They'll create a **SignPath Foundation organization** for you with:
+   - `organization-id`
+   - a **project** (slug) linked to this GitHub repo
+   - a **signing policy** (slug) — typically restricted to tag builds from
+     GitHub-hosted runners
+   - a user with submitter rights → generates your **API token**
+3. Add the **SignPath GitHub App** access if asked (for origin verification).
+
+### 2. Add 4 secrets to the repo
+
+Settings → **Secrets and variables → Actions**:
+
+| Secret | Value |
+|---|---|
+| `SIGNPATH_API_TOKEN` | token from your SignPath user |
+| `SIGNPATH_ORG_ID` | your organization id |
+| `SIGNPATH_PROJECT_SLUG` | e.g. `techintel` |
+| `SIGNPATH_SIGNING_POLICY_SLUG` | e.g. `release-signing` |
+
+### 3. Done — push a `v*` tag
+
+`.github/workflows/build-desktop.yml` already contains the gated integration:
+
+1. **Upload unsigned EXE** (`actions/upload-artifact@v4`, captures `artifact-id`)
+2. **Submit signing request** (`signpath/github-action-submit-signing-request@v3`,
+   waits for completion, extracts the signed EXE to `signed/`)
+3. **Swap the signed EXE** into `dist/TechIntel.exe`
+4. Normal upload + release-attach continue from there (now using the signed file)
+
+The steps run **only** on tag pushes **and** when the secrets exist — so the
+unsigned path is untouched elsewhere. After the next tag build, the EXE on the
+Release is signed → the browser/SmartScreen warnings disappear.
+
+> Note: the step defaults to `actions/upload-artifact`'s ZIP packaging; SignPath
+> validates this through your artifact configuration during onboarding. If a
+> "same filename" artifact bug is hit, use a unique artifact name (the workflow
+> already uses `techintel-exe-unsigned`).
+
+---
+
+## Option B — Azure Artifact Signing (paid fallback, ~$10/month)
+
+Microsoft renamed **Trusted Signing → Artifact Signing**; use the current
+action [`Azure/artifact-signing-action`](https://github.com/Azure/artifact-signing-action).
+Requires an Azure subscription + identity validation, then 5 repo secrets.
+
+To switch from SignPath, replace the three gated steps in
+`build-desktop.yml` with:
 
 ```yaml
-      # Near the end of build-desktop.yml (after "Build one-file EXE",
-      # before "Upload EXE artifact"). Requires the 5 Azure secrets above
-      # and the Azure/trusted-signing-action@v0 action.
-      - name: Sign the EXE (Azure Trusted Signing)
+      - name: Sign the EXE (Azure Artifact Signing)
         if: startsWith(github.ref, 'refs/tags/')
-        uses: azure/trusted-signing-action@v0
+        uses: azure/artifact-signing-action@v1
         with:
           endpoint: https://eus.codesigning.azure.net   # your region
           trusted-signing-account-name: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ secrets.AZURE_TRUSTED_SIGNING_CERT_PROFILE }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
           files-folder: dist
           files-folder-filter: '*.exe'
-          signing-proxy-url: http://localhost:5000
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          client-certificate: ${{ secrets.AZURE_CLIENT_CERTIFICATE }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
 ```
 
----
-
-## Option B — SignPath.io (free for open source)
-
-Free code signing for open-source projects via the [SignPath OSS
-program](https://about.signpath.io/en/oss-program/). Same end result — the
-Signed EXE carries an authenticode signature trusted by Windows/Chrome.
-
-1. Create a SignPath account and submit the TechIntel project to the OSS
-   program (takes a few days for review).
-2. Set up a **code signing policy** with "sign after CI build".
-3. Add the SignPath secrets to the repo (`SIGNPATH_USERNAME` /
-   `SIGNPATH_PASSWORD` / `SIGNPATH_ORG_ID` / `SIGNPATH_PROJECT_SLUG` /
-   `SIGNPATH_API_TOKEN`).
-4. Add the official `signpath/github-action-submit-signing-request@v1` step
-   to `build-desktop.yml`, then push a new tag.
+Secrets needed: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`,
+`AZURE_TRUSTED_SIGNING_ACCOUNT`, `AZURE_CERT_PROFILE`.
+(Full Azure setup walkthrough:
+[learn.microsoft.com — Set up Artifact Signing](https://learn.microsoft.com/en-us/azure/artifact-signing/how-to-signing-integrations) —
+OIDC/federated credentials are the recommended auth over a client secret.)
 
 ---
 
 ## Option C — Accept it (zero cost, works today)
 
-The warning is one click ("Keep" in Chrome, "More info → Run anyway" in
-SmartScreen — see the README), and every build is **byte-verifiable** via the
-SHA-256 fingerprints published in the README. Reputation grows automatically
-as more people download and run the EXE; for many small open-source projects
-the prompt disappears after a few hundred to a few thousand downloads.
+- Every download is **byte-verifiable** via the SHA-256 fingerprints in the
+  README.
+- The prompts are one click: Chrome **"Keep"**, SmartScreen
+  **"More info → Run anyway"** (detailed in the README's first-run guide).
+- Reputation grows automatically with each download/run; for small OSS
+  projects the warnings often fade after a few hundred to a few thousand
+  downloads.
 
 ---
 
 ## Why self-signing is NOT the answer
 
-Signing with a self-generated certificate makes things **worse**: Windows
-switches from "unknown app" to *"**Unknown Publisher**"* — a scarier prompt
-with even less information. Only certificates issued by a CA trusted by
-Microsoft's Authenticode trust chain (as in Options A/B) remove the warnings.
+A self-generated certificate makes things **worse**: Windows switches from
+"unknown app" to *"**Unknown Publisher**"* — a scarier prompt with less
+information. Only CA-trusted Authenticode certificates (Options A/B) remove
+the warnings.
+
+## Why Certum's OSS tier isn't recommended here
+
+As of 2026 Certum's Open Source tier is no longer the free/instant path it
+used to be (cloud/Hardware-based issuance, ~€25+, per-use tooling). SignPath
+Foundation is the purpose-built free option for exactly this use case.
 
 ## Android note
 
 The APK ships debug-signed (verified: v1+v2 schemes, `com.techintel.live`).
 Android sideloading shows a single "allow unknown apps" confirmation, which
-is normal and expected for any non-Play-Store APK. Play Store signing would
-require a Play Console account and is out of scope by design.
+is normal for any non-Play-Store APK. Play Store signing would require a Play
+Console account and is out of scope by design.

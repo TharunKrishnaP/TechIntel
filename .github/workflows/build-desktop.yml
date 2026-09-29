@@ -7,9 +7,11 @@ on:
   workflow_dispatch:
 
 # Needed so the "Attach to GitHub Release" step can create/update releases
-# and upload assets (the repo's default GITHUB_TOKEN is read-only).
+# and upload assets (the repo's default GITHUB_TOKEN is read-only), and the
+# SignPath OSS signing step can read the uploaded artifact.
 permissions:
   contents: write
+  actions: read
 
 jobs:
   exe:
@@ -42,6 +44,39 @@ jobs:
             --exclude-module numpy `
             --exclude-module pandas `
             desktop\launcher.py
+
+      # --- Free OSS code signing (SignPath Foundation / SignPath.io) ---
+      # Fully inactive until the FOUR secrets below exist in the repo (Settings →
+      # Secrets and variables → Actions). Once added, tag builds submit the EXE
+      # for signing and swap in the signed copy before upload/release, which
+      # removes the SmartScreen/"not commonly downloaded" warnings. Nothing here
+      # changes the unsigned path used today. See docs/CODE-SIGNING.md.
+      - name: Upload unsigned EXE for signing
+        if: startsWith(github.ref, 'refs/tags/') && secrets.SIGNPATH_API_TOKEN != ''
+        id: upload-unsigned-exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: techintel-exe-unsigned
+          path: dist/TechIntel.exe
+
+      - name: Sign the EXE via SignPath (free OSS)
+        if: startsWith(github.ref, 'refs/tags/') && secrets.SIGNPATH_API_TOKEN != ''
+        id: signpath-sign
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORG_ID }}
+          project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned-exe.outputs.artifact-id }}
+          wait-for-completion: "true"
+          output-artifact-directory: signed
+
+      - name: Swap in the signed EXE
+        if: startsWith(github.ref, 'refs/tags/') && secrets.SIGNPATH_API_TOKEN != ''
+        run: |
+          Copy-Item -Force "signed\TechIntel.exe" "dist\TechIntel.exe"
+          Get-ChildItem signed | ForEach-Object { "signed artifact: $($_.Name) $($_.Length) bytes" }
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
