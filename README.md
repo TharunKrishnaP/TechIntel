@@ -21,7 +21,8 @@
 bundles the live backend (double-click and it runs itself — the dashboard
 auto-refreshes against live RSS/release feeds every minute); the Android APK
 ships with the offline data snapshot baked in and can be pointed at any live
-TechIntel backend (or your desktop) via the 🌐 Server button.
+TechIntel backend (your desktop **or** the free hosted cloud backend — one tap
+via the 🌐 Server button).
 
 <div align="center">
 
@@ -70,7 +71,7 @@ exact bytes the download buttons serve):
 
 | File | SHA-256 |
 |---|---|
-| `TechIntel.exe` | `387173fa64002f569884c4be4d1874d0870407def006991c45b078d698e41ea5` |
+| `TechIntel.exe` | `ab62deb61ca247dc5c371dab9bc0e4569225e2825274db7f9eeb0c70b968478f` |
 | `TechIntel.apk` | `ebde71ff835375451ff08600ecf4d0873207138f15cb2ae52db1f9f5dc55fcd9` |
 
 Check the file you downloaded and confirm it matches:
@@ -169,6 +170,7 @@ lets the window quietly drift out of the 30-day range.
 | Layer | Technology |
 |-------|-----------|
 | **Backend** | FastAPI, Python 3.11, SQLite (WAL mode) |
+| **Hosted backend** | Cloudflare Worker + D1 + cron (portable, deploy to any account) |
 | **AI Engine** | Google Gemini API (`google-genai`) |
 | **Data Pipeline** | Async RSS/Atom ingestion, token-overlap clustering |
 | **Frontend** | Vanilla JS, CSS animations, Canvas API |
@@ -226,7 +228,13 @@ Plus two installable-app builds:
 │   ├── android/             # Generated Android project (committed)
 │   ├── build_apk.ps1        # Local APK build (needs Android Studio/SDK)
 │   └── README.md            # APK build & sideload instructions
-└── .github/workflows/       # Free cloud builds: build-desktop.yml (EXE), build-android.yml (APK)
+├── workers/                 # Hosted cloud backend (Cloudflare Worker + D1)
+│   ├── src/                 # TS port of backend/ (models, db, matcher, ingest, index)
+│   ├── schema.sql           # D1 schema (mirrors database.py)
+│   ├── seed.sql             # SQL seed for `wrangler d1 execute`
+│   ├── scripts/generate-seed.mjs
+│   └── test/run-tests.mjs   # node:sqlite harness (58 asserts — no Cloudflare needed)
+└── .github/workflows/       # Free cloud builds: build-desktop.yml (EXE), build-android.yml (APK), deploy-worker.yml (Cloudflare, secrets-gated)
 ```
 
 ---
@@ -388,14 +396,23 @@ anyway** (it's built from this public repo).
 A native Android app (Capacitor WebView) with the **offline snapshot baked
 in** — it opens instantly with no network and no server, exactly like the
 installed PWA. It also renders full-width on phone screens, and you can go
-live at any time: open the **🌐 Server** button in the header and enter a
-TechIntel backend's URL (see the tip below) — the app then polls that backend
-just like the desktop build does.
+live from anywhere in two taps: open the **🌐 Server** button and pick
+**“Use cloud backend”** (the free hosted API) or enter any TechIntel
+backend's URL manually.
 
-> **Tip — point the APK at your desktop:** launch the EXE headless on your
-> computer with `TECHINTEL_PORT=8123 TECHINTEL_NO_BROWSER=1`, note its LAN
+> **🌐 Hosted cloud backend (live from anywhere).** TechIntel includes a fully
+> portable Cloudflare Worker + D1 backend (`workers/`) with the same `/api/*`
+> surface, auto-seeded and kept live by a 15-minute cron trigger. Deploy it to
+> *any* Cloudflare account you own (free tier suffices) in ~10 minutes with the
+> step-by-step [Deploy to Cloudflare](docs/DEPLOY-CLOUDFLARE.md) runbook. Once
+> deployed, paste the URL into `frontend/pwa/api.js` (`PUBLIC_SERVER`), rebuild
+> the APK, and every phone points at the live cloud automatically.
+>
+> **Tip — point the APK at your desktop right now:** launch the EXE headless on
+> your computer with `TECHINTEL_PORT=8123 TECHINTEL_NO_BROWSER=1`, note its LAN
 > IP (`ipconfig`), then enter `http://<that-ip>:8123` in the APK's 🌐 Server
-> dialog. The phone talks to the backend on the same network.
+> dialog (or tap **Scan LAN**). The phone talks to the backend on the same
+> network — no cloud needed.
 
 ### Get the APK
 
@@ -453,7 +470,7 @@ curl "http://127.0.0.1:8000/api/tools/python/evolution?days=30"
 - [x] PWA — installable on desktop & Android (bundled offline snapshot)
 - [x] Desktop app — self-contained EXE bundling the live backend
 - [x] Android app — sideloadable APK built free on GitHub Actions
-- [ ] Web deployment (Render.com / Railway)
+- [x] Hosted cloud backend — Cloudflare Worker + D1, deployable to any account (docs/DEPLOY-CLOUDFLARE.md)
 - [ ] User accounts & personalized tracking
 - [ ] Email/push alerts for tracked technologies
 - [ ] Expanded feed sources (Product Hunt, npm, PyPI release feeds)

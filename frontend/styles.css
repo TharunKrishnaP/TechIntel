@@ -2579,6 +2579,83 @@ body {
   flex-wrap: wrap;
   margin-top: 20px;
 }
+.server-hosted-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(var(--primary-rgb, 99, 102, 241), 0.10), rgba(23, 37, 84, 0.35));
+}
+.server-hosted-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.server-hosted-info strong {
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+.server-hosted-info span {
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.server-hosted-row .btn-primary {
+  white-space: nowrap;
+  flex: 0 0 auto;
+  padding: 9px 14px;
+  font-size: 0.82rem;
+}
+.server-status { line-height: 1.5; }
+.server-status.ok { color: var(--accent-emerald, #34d399); }
+.server-status.warn { color: var(--accent-amber, #fbbf24); }
+.server-status.muted { color: var(--text-dim); }
+.scan-status {
+  font-size: 0.78rem;
+  color: var(--accent-cyan, #22d3ee);
+  margin: 10px 0 0;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  min-height: 1em;
+}
+.server-save-anyway {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  text-decoration: underline;
+}
+.server-save-anyway:hover { color: var(--text-main); }
+.hidden { display: none !important; }
+.mode-chip.fail {
+  background: rgba(var(--accent-amber-rgb, 251, 191, 36), 0.12);
+  border: 1px solid var(--accent-amber, #fbbf24);
+  color: var(--accent-amber, #fbbf24);
+}
+
+/* Tablet & small-laptop screens (769-1460): the header's two halves (brand +
+   stats on the left, theme picker + search + actions on the right) can total
+   more than the viewport on common laptop widths and were getting clipped.
+   Let each half wrap onto its own line instead. */
+@media (max-width: 1460px) {
+  .platform-header { flex-wrap: wrap; row-gap: 10px; }
+  .header-right { flex-wrap: wrap; justify-content: flex-end; }
+  /* Navigation tabs: keep them scrollable (not wrapping) up into tablet width,
+     so a long tab row can't pin the page wider than the screen. */
+  .nav-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .tab-btn { flex: 0 0 auto; }
+}
 
 /* =========================================================================
    MOBILE SCREEN-FIT — phones and narrow tablets
@@ -2609,6 +2686,20 @@ body {
   }
   .theme-picker-wrapper::-webkit-scrollbar { display: none; }
   .picker-label { display: none; }
+  /* Category filters must shrink to the row width and scroll internally —
+     without this a flex item with many chips pins the whole page wider than
+     the screen on phones (observed: 570px document on a 390px viewport). */
+  .category-filters {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .category-filters::-webkit-scrollbar { display: none; }
   .nav-container { padding: 0 14px; }
   .nav-tabs {
     overflow-x: auto;
@@ -2635,10 +2726,21 @@ body {
   .modal-body { padding: 18px; }
   .modal-card-wide { max-width: 100%; }
   .event-card { padding: 15px; }
+  /* Welcome/guide card: let the CTA + close buttons wrap below the text on
+     narrow screens instead of pinning the card (and the page) wider. */
+  .welcome-guide-card {
+    margin: 14px 14px 0;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .guide-actions { flex-wrap: wrap; justify-content: flex-end; }
+  /* Event-card footer action cluster must wrap too, or it overflows the card. */
+  .footer-actions { flex-wrap: wrap; }
 }
 
 @media (max-width: 480px) {
   .platform-header { padding: 8px 10px; }
+  .search-box { width: 100%; min-width: 0; max-width: 330px; }
   .main-container { padding: 10px; }
   .welcome-guide-card { padding: 14px; }
   .feed-controls-card { padding: 14px; }
@@ -2664,5 +2766,8 @@ body {
   .server-actions .btn-secondary { flex: 1 1 auto; }
   .btn-refresh span { display: none; }
   .btn-refresh { padding: 9px 12px; }
+  .btn-react { padding: 6px 10px; font-size: 0.78rem; }
+  .sources-trigger-btn { padding: 6px 12px; font-size: 0.78rem; }
+  .btn-guide-cta { padding: 8px 16px; font-size: 0.84rem; }
 }
 

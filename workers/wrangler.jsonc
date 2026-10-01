@@ -1,0 +1,20 @@
+// TechIntel hosted API — Cloudflare Worker + D1.
+// Deploy to YOUR Cloudflare account (see docs/DEPLOY-CLOUDFLARE.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "techintel-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  // Auto re-poll the public feeds every 15 minutes so the hosted API is live.
+  "cron_triggers": [
+    { "cron": "*/15 * * * *" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "techintel-db",
+      // Fill in after `npx wrangler d1 create techintel-db` (prints an id).
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+    }
+  ]
+}

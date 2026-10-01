@@ -1,0 +1,75 @@
+# Deploy the hosted TechIntel Worker + D1 to Cloudflare.
+#
+# This job stays GREEN-but-SKIPPED until the three Cloudflare secrets exist in
+# the repo (Settings -> Secrets and variables -> Actions):
+#   CF_API_TOKEN   -> Cloudflare API token (Workers Scripts:Edit + D1:Edit + Account read)
+#   CF_ACCOUNT_ID  -> Cloudflare account ID
+#   CF_D1_ID       -> the D1 database_id from `npx wrangler d1 create techintel-db`
+#
+# See docs/DEPLOY-CLOUDFLARE.md for the full manual runbook. The Worker is
+# account-agnostic: it deploys under whichever account the token belongs to.
+name: Deploy Cloudflare Worker
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: workers/package-lock.json
+
+      - name: Install dependencies
+        working-directory: workers
+        run: npm ci
+
+      # The postinstall scripts for esbuild/workerd can be blocked on newer
+      # npm; deploy needs esbuild's bundler (provided as an optional dep) but
+      # not workerd (local dev only). Approve scripts so `wrangler` works in
+      # every mode anyway.
+      - name: Approve install scripts
+        working-directory: workers
+        run: npm approve-scripts --allow-scripts-pending || true
+
+      - name: Typecheck
+        working-directory: workers
+        run: npx tsc -p tsconfig.json --noEmit
+
+      - name: Build + backend test suite (node:sqlite)
+        working-directory: workers
+        run: |
+          npx tsc -p tsconfig.json
+          node test/run-tests.mjs
+
+      # The rest only really deploys when the Cloudflare secrets are present.
+      # Without them this step prints a friendly skip line and the job stays
+      # green (the repo's other builds must not be blocked by a missing token).
+      - name: Deploy Worker + D1 schema to Cloudflare
+        if: env.CF_API_TOKEN != '' && env.CF_ACCOUNT_ID != '' && env.CF_D1_ID != ''
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_D1_ID: ${{ secrets.CF_D1_ID }}
+        working-directory: workers
+        run: |
+          # Swap the placeholder database id for the real one before deploying.
+          sed -i "s/REPLACE_WITH_YOUR_D1_DATABASE_ID/$CF_D1_ID/" wrangler.jsonc
+          grep -n "database_id" wrangler.jsonc
+          # Schema is idempotent (CREATE TABLE IF NOT EXISTS), safe to run on every deploy.
+          npx wrangler d1 execute techintel-db --remote --file=schema.sql
+          npx wrangler deploy
+
+      - name: Skip message (Cloudflare secrets not configured)
+        if: env.CF_API_TOKEN == '' || env.CF_ACCOUNT_ID == '' || env.CF_D1_ID == ''
+        run: |
+          echo "::notice::Cloudflare secrets not configured — skipping hosted-backend deploy."
+          echo "Add CF_API_TOKEN, CF_ACCOUNT_ID and CF_D1_ID repo secrets to enable it (docs/DEPLOY-CLOUDFLARE.md)."

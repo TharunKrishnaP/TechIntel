@@ -470,22 +470,35 @@
         <button class="modal-close" id="btnServerClose">&times;</button>
       </div>
       <div class="modal-body">
-        <p id="serverStatusText" style="margin: 0 0 16px; font-size: 0.88rem;"></p>
+        <p id="serverStatusText" class="server-status" style="margin: 0 0 16px; font-size: 0.88rem;"></p>
         <label class="server-field-label" for="serverUrlInput">Server URL</label>
         <input type="text" id="serverUrlInput" class="server-input"
                placeholder="http://192.168.1.5:8123  or  https://techintel.example.com"
                autocomplete="url" spellcheck="false" />
         <p class="server-help">
           Point this install at any running TechIntel backend to switch from the
-          bundled snapshot to live data. Tip: on your desktop, launch the app
-          headless with <code>TECHINTEL_PORT=8123 TECHINTEL_NO_BROWSER=1</code> and
-          enter the computer's LAN address here. Leave blank and press connect to
-          clear an old address — or disconnect to go back to offline.
+          bundled snapshot to <strong>live data</strong>. On your desktop, launch the app
+          headless and reachable from other devices with
+          <code>TECHINTEL_HOST=0.0.0.0 TECHINTEL_PORT=8123 TECHINTEL_NO_BROWSER=1</code>,
+          then enter this computer's LAN address here. Tap <strong>Scan LAN</strong> to
+          find a TechIntel backend on your network automatically, or disconnect to
+          go back to offline.
         </p>
+        <p class="scan-status" id="serverScanStatus" hidden></p>
+        <div class="server-hosted-row hidden" id="hostedRow">
+          <div class="server-hosted-info">
+            <strong>🌐 Public cloud backend</strong>
+            <span>Free hosted API — live data from anywhere, no desktop needed.</span>
+          </div>
+          <button class="btn-primary" id="btnUseHosted" type="button">Use cloud backend</button>
+        </div>
         <div class="server-actions">
+          <button class="btn-secondary" id="btnServerScan" title="Search this network for a running TechIntel backend">🔎 Scan LAN</button>
           <button class="btn-secondary" id="btnServerDisconnect">Use offline snapshot</button>
           <button class="btn-primary" id="btnServerConnect">Connect</button>
         </div>
+        <a href="#" id="serverSaveAnyway" class="server-save-anyway hidden"
+           title="Save this URL even though it did not answer the health check">Save anyway</a>
       </div>
     </div>
   </div>

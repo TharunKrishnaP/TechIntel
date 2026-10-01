@@ -4,7 +4,8 @@
   "webDir": "../frontend",
   "version": "1.0.0",
   "android": {
-    "backgroundColor": "#070a18"
+    "backgroundColor": "#070a18",
+    "allowMixedContent": true
   },
   "server": {
     "androidScheme": "https",

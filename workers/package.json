@@ -1,0 +1,22 @@
+{
+  "name": "techintel-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hosted Cloudflare Workers + D1 backend for TechIntel (live real-time data anywhere)",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node scripts/generate-seed.mjs && tsc -p tsconfig.json && node test/run-tests.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "seed": "npm run build && node scripts/seed-local.mjs"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.11.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261001.1",
+    "typescript": "^5.5.0",
+    "wrangler": "^4.145.0"
+  }
+}

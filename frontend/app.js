@@ -8,6 +8,7 @@ const state = {
   selectedCategory: 'All',
   selectedImportance: 'All',
   searchQuery: '',
+  scanning: false, // LAN-scanner re-entrancy guard
   // Historical browsing window. `days` = trailing N days; 'all' disables the filter.
   // Defaults to the full 30-day trail: the point of this view is the history, so
   // opening on "today only" would hide the very thing it was built to show.
@@ -112,8 +113,15 @@ const elements = {
   serverStatusText: document.getElementById('serverStatusText'),
   serverUrlInput: document.getElementById('serverUrlInput'),
   btnServerConnect: document.getElementById('btnServerConnect'),
+  btnServerScan: document.getElementById('btnServerScan'),
+  serverScanStatus: document.getElementById('serverScanStatus'),
+  serverSaveAnyway: document.getElementById('serverSaveAnyway'),
   btnServerDisconnect: document.getElementById('btnServerDisconnect'),
-  btnServerClose: document.getElementById('btnServerClose')
+  btnServerClose: document.getElementById('btnServerClose'),
+
+  // Hosted cloud backend row (only shown when API.publicServer is set)
+  hostedRow: document.getElementById('hostedRow'),
+  btnUseHosted: document.getElementById('btnUseHosted')
 };
 
 // ---------------------------------------------------------------------------
@@ -181,9 +189,25 @@ function renderDataSourceChip() {
   } else {
     const build = API.buildInfo;
     elements.modeChip.hidden = false;
-    elements.modeChip.title = build && build.generated_at
-      ? `Showing the snapshot bundled at build time (${build.generated_at}). Use the 🌐 Server button in the header to connect a live backend.`
-      : 'Showing the bundled offline snapshot. Use the 🌐 Server button in the header to connect a live backend.';
+    const attempted = API.attempted;
+    if (attempted) {
+      // The user configured a server but it could not be reached: say so loudly
+      // instead of a puzzling "offline snapshot".
+      elements.modeChip.classList.add('fail');
+      elements.modeChip.innerHTML =
+        '<span class="chip-icon">⚠️</span><span class="chip-text">Server unreachable</span>';
+      elements.modeChip.title =
+        `Could not reach ${attempted}. The desktop backend must be running, bound to the ` +
+        'network (TECHINTEL_HOST=0.0.0.0), and reachable over the same Wi‑Fi. ' +
+        'Showing the bundled snapshot for now. Open 🌐 Server to retry or scan the LAN.';
+    } else {
+      elements.modeChip.classList.remove('fail');
+      elements.modeChip.innerHTML =
+        '<span class="chip-icon">📦</span><span class="chip-text">Offline snapshot</span>';
+      elements.modeChip.title = build && build.generated_at
+        ? `Showing the snapshot bundled at build time (${build.generated_at}). Use the 🌐 Server button in the header to connect a live backend.`
+        : 'Showing the bundled offline snapshot. Use the 🌐 Server button in the header to connect a live backend.';
+    }
   }
 }
 
@@ -192,13 +216,20 @@ function updateServerStatus() {
   if (!elements.serverStatusText) return;
   if (API.isLive) {
     const where = API.server ? ` (${API.server})` : ' (same origin)';
-    elements.serverStatusText.textContent =
+    elements.serverStatusText.className = 'server-status ok';
+    elements.serverStatusText.innerHTML =
       `✓ Connected to a live TechIntel backend${where}. Data refreshes automatically.`;
-    elements.serverStatusText.style.color = 'var(--accent-emerald)';
+  } else if (API.attempted) {
+    elements.serverStatusText.className = 'server-status warn';
+    elements.serverStatusText.innerHTML =
+      `⚠ ${API.attempted} was set as the server but could not be reached, so this install is ` +
+      'showing the bundled offline snapshot. Verify the desktop backend is running and ' +
+      'bound to the network (<code>TECHINTEL_HOST=0.0.0.0</code>), or scan the LAN below.';
   } else {
-    elements.serverStatusText.textContent =
-      '📦 No server detected — showing the bundled offline snapshot. Connect to a TechIntel backend below to go live.';
-    elements.serverStatusText.style.color = '';
+    elements.serverStatusText.className = 'server-status';
+    elements.serverStatusText.innerHTML =
+      '📦 No server detected — showing the bundled offline snapshot. ' +
+      'Connect to a TechIntel backend to go live, or tap <strong>Scan LAN</strong>.';
   }
 }
 
@@ -581,25 +612,75 @@ function setupEventListeners() {
     elements.btnServer.addEventListener('click', () => {
       elements.serverUrlInput.value = API.configured || '';
       updateServerStatus();
+      // Surface the one-tap cloud option when this build ships a hosted
+      // backend URL and no explicit server is configured yet.
+      if (elements.hostedRow) {
+        const showHosted = !!API.publicServer && !API.configured;
+        elements.hostedRow.classList.toggle('hidden', !showHosted);
+      }
       elements.serverModal.style.display = 'flex';
       setTimeout(() => elements.serverUrlInput.focus(), 50);
     });
   }
+  if (elements.btnUseHosted) {
+    elements.btnUseHosted.addEventListener('click', () => {
+      try {
+        localStorage.setItem('techintel_server', API.publicServer);
+        serverStatusMessage(`✓ Connecting to the hosted cloud backend (${API.publicServer}). Reloading with live data…`, 'ok');
+        setTimeout(() => location.reload(), 400);
+      } catch (_) {
+        serverStatusMessage('Could not save the server URL (storage unavailable).', 'warn');
+      }
+    });
+  }
   if (elements.btnServerConnect) {
-    elements.btnServerConnect.addEventListener('click', () => {
+    elements.btnServerConnect.addEventListener('click', async () => {
       let url = elements.serverUrlInput.value.trim().replace(/\/+$/, '');
       if (!url) {
-        setFeedSummary('Enter a server URL first (e.g. http://192.168.1.5:8123).', true);
+        serverStatusMessage('Enter a server URL first, e.g. <code>http://192.168.1.5:8123</code>.', 'warn');
         return;
       }
       if (!/^https?:\/\//i.test(url)) url = 'http://' + url;
-      try {
-        localStorage.setItem('techintel_server', url);
-        location.reload();
-      } catch (_) {
-        setFeedSummary('Could not save the server URL (storage unavailable).', true);
+
+      // Test before committing: a saved-but-unreachable URL silently falls back
+      // to the snapshot, which reads as "the app doesn't work". Verify first.
+      elements.btnServerConnect.disabled = true;
+      serverStatusMessage(`Testing ${url}…`, 'muted');
+      const probe = await API.testServer(url, 4000);
+      elements.btnServerConnect.disabled = false;
+      if (probe.ok) {
+        try {
+          localStorage.setItem('techintel_server', url);
+          serverStatusMessage(`✓ Connected to ${url}. Reloading with live data…`, 'ok');
+          setTimeout(() => location.reload(), 400);
+        } catch (_) {
+          serverStatusMessage('Could not save the server URL (storage unavailable).', 'warn');
+        }
+      } else {
+        const why = probe.status ? `answered with HTTP ${probe.status}` : (probe.error === 'timeout' ? 'timed out' : 'could not be reached');
+        serverStatusMessage(
+          `✗ ${url} ${why}. Check that the backend is running on that machine,<br>` +
+          `it is bound to the network (start it with <code>TECHINTEL_HOST=0.0.0.0</code>),<br>` +
+          'and that both devices share the same network. Or scan below.',
+          'warn'
+        );
+        if (elements.serverSaveAnyway) elements.serverSaveAnyway.classList.remove('hidden');
       }
     });
+  }
+  if (elements.serverSaveAnyway) {
+    elements.serverSaveAnyway.addEventListener('click', () => {
+      const url = (elements.serverUrlInput.value.trim().replace(/\/+$/, '')) || '';
+      if (!/^https?:\/\//i.test(url) && url) {
+        localStorage.setItem('techintel_server', 'http://' + url);
+      } else if (url) {
+        localStorage.setItem('techintel_server', url);
+      }
+      location.reload();
+    });
+  }
+  if (elements.btnServerScan) {
+    elements.btnServerScan.addEventListener('click', () => scanLanForBackend());
   }
   if (elements.btnServerDisconnect) {
     elements.btnServerDisconnect.addEventListener('click', () => {
@@ -618,6 +699,126 @@ function setupEventListeners() {
     });
     elements.serverUrlInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && elements.btnServerConnect) elements.btnServerConnect.click();
+    });
+  }
+
+  /** Set the server-dialog status line (plain text with optional HTML). */
+  function serverStatusMessage(html, tone) {
+    if (!elements.serverStatusText) return;
+    elements.serverStatusText.innerHTML = html;
+    elements.serverStatusText.className = 'server-status ' + (tone || '');
+  }
+
+  /**
+   * Scan the LAN for a running TechIntel backend and offer to connect.
+   * Strategy: ask WebRTC for this device's own private IPv4 (works in most
+   * Android WebViews) and scan that /24; if the IP is hidden/obfuscated, fall
+   * back to the two most common home subnets. Probes the default desktop port.
+   */
+  async function scanLanForBackend() {
+    if (state.scanning) return;
+    state.scanning = true;
+    let cancelled = false;
+    const scanStatus = (txt) => {
+      if (elements.serverScanStatus) {
+        elements.serverScanStatus.textContent = txt || '';
+        elements.serverScanStatus.classList.toggle('hidden', !txt);
+      }
+    };
+    const cleanup = () => { state.scanning = false; };
+
+    const subnets = await discoverLikelySubnets();
+    if (!subnets.length) {
+      scanStatus('Could not guess your network. Enter the desktop’s IP manually above.');
+      cleanup();
+      return;
+    }
+    const PORTS = [8123, 8000];
+    const found = [];
+    for (const subnet of subnets) {
+      for (const port of PORTS) {
+        if (cancelled) break;
+        scanStatus(`Scanning ${subnet}.0.0/24 on port ${port}…`);
+        const hit = await scanSubnet(subnet, port, (done, total) => {
+          scanStatus(`Scanning ${subnet}.0.0/24 on port ${port}… ${done}/${total}`);
+        });
+        if (hit) {
+          found.push(hit);
+          break; // one hit per subnet is enough
+        }
+      }
+    }
+    if (found.length) {
+      const url = found[0];
+      elements.serverUrlInput.value = url;
+      scanStatus(`✓ Found: ${url}`);
+      await new Promise(r => setTimeout(r, 300));
+      if (elements.btnServerConnect) elements.btnServerConnect.click();
+    } else if (!cancelled) {
+      scanStatus('No TechIntel backend found on this network. Is the desktop app running?');
+    }
+    cleanup();
+  }
+
+  async function scanSubnet(subnet, port, onProgress) {
+    const CONCURRENCY = 10;
+    const TIMEOUT_MS = 500;
+    const hosts = Array.from({ length: 254 }, (_, i) => i + 1);
+    let nextIdx = 0;
+    let done = 0;
+    const workers = Array.from({ length: CONCURRENCY }, async () => {
+      while (nextIdx < hosts.length) {
+        const ip = subnet + '.' + hosts[nextIdx++];
+        const res = await API.testServer(`${ip}:${port}`, TIMEOUT_MS);
+        done++;
+        if (onProgress) onProgress(done, hosts.length);
+        if (res.ok) return `${ip}:${port}`;
+      }
+      return null;
+    });
+    const hits = await Promise.all(workers);
+    return hits.find(Boolean) || null;
+  }
+
+  /** Private IPv4 of this device (via WebRTC ICE) or the common home subnets. */
+  function discoverLikelySubnets() {
+    return new Promise((resolve) => {
+      const candidates = new Set();
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        const priv = [...candidates].filter(ip => /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(ip));
+        const subnets = [...new Set(priv.map(ip => ip.split('.').slice(0, 3).join('.')))];
+        if (subnets.length) {
+          resolve(subnets.slice(0, 2));
+        } else {
+          // No device IP exposed (mDNS-obfuscated WebRTC in some WebViews):
+          // scan the two most common home LAN ranges.
+          resolve(['192.168.1', '192.168.0']);
+        }
+      };
+      try {
+        if (typeof RTCPeerConnection !== 'function') { finish(); return; }
+        const pc = new RTCPeerConnection({ iceServers: [] });
+        pc.onicecandidate = (e) => {
+          if (!e.candidate) { pc.close(); finish(); return; }
+          const addr = (e.candidate.candidate.match(/ (\d+\.\d+\.\d+\.\d+) /) || [])[1];
+          if (addr) candidates.add(addr);
+        };
+        pc.createDataChannel('discover');
+        const guard = setTimeout(() => { try { pc.close(); } catch (_) {} finish(); }, 3500);
+        pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => { clearTimeout(guard); finish(); });
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === 'completed' || pc.iceConnectionState === 'failed') {
+            clearTimeout(guard);
+            try { pc.close(); } catch (_) {}
+            finish();
+          }
+        };
+      } catch (_) {
+        finish();
+      }
     });
   }
 

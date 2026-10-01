@@ -20,6 +20,9 @@ behaves exactly like `uvicorn backend.main:app`.
 Environment variables usable by power users (all optional):
   TECHINTEL_DATA_DIR   where techintel.db + techintel.log live
   TECHINTEL_PORT       fixed port (overridden by --port)
+  TECHINTEL_HOST       bind address, e.g. 0.0.0.0 to let other devices on the
+                       network (the Android app) reach this backend
+  TECHINTEL_NO_BROWSER headless mode: serve without opening a window
 """
 
 import argparse
@@ -105,7 +108,8 @@ def parse_args(argv=None):
         prog="TechIntel",
         description="TechIntel — Live Technology Intelligence (desktop app)",
     )
-    p.add_argument("--host", default="127.0.0.1", help="bind address (default 127.0.0.1)")
+    p.add_argument("--host", default=None,
+                   help="bind address (default: TECHINTEL_HOST env, else 127.0.0.1)")
     p.add_argument("--port", type=int, default=0,
                    help="port to listen on (default: pick a free one)")
     p.add_argument("--no-browser", action="store_true",
@@ -138,6 +142,12 @@ def main(argv=None):
         os.environ["TECHINTEL_DB"] = os.path.join(data_dir_abs, "techintel.db")
     port = args.port or int(os.environ.get("TECHINTEL_PORT") or 0)
 
+    # LAN reachability: the default loopback bind is impenetrable from other
+    # devices (e.g. the Android app on the same Wi‑Fi). Resolve the bind host
+    # as: --host flag > TECHINTEL_HOST env > loopback.
+    host = args.host or os.environ.get("TECHINTEL_HOST") or "127.0.0.1"
+    no_browser = args.no_browser or os.environ.get("TECHINTEL_NO_BROWSER") == "1"
+
     # Delayed import: app_paths.get_data_dir() now sees TECHINTEL_DATA_DIR.
     from backend.app_paths import get_data_dir
     data_dir = get_data_dir()
@@ -151,12 +161,12 @@ def main(argv=None):
         return 1
 
     if not port:
-        port = pick_port(args.host)
+        port = pick_port(host)
         log.info("picked free port %d", port)
 
     import uvicorn
     server = uvicorn.Server(
-        uvicorn.Config(app, host=args.host, port=port, log_level="warning", access_log=False)
+        uvicorn.Config(app, host=host, port=port, log_level="warning", access_log=False)
     )
 
     def serve():
@@ -168,8 +178,8 @@ def main(argv=None):
     thread = threading.Thread(target=serve, daemon=True, name="uvicorn")
     thread.start()
 
-    url = f"http://{args.host}:{port}/"
-    ok, last_error = wait_ready(args.host, port, log)
+    url = f"http://{host}:{port}/"
+    ok, last_error = wait_ready(host, port, log)
     if not ok:
         log.error("health check failed after retries — server.started=%s "
                   "thread_alive=%s last_error=%s",
@@ -177,7 +187,7 @@ def main(argv=None):
         return 1
     log.info("backend healthy at %s", url)
 
-    if args.no_browser:
+    if no_browser:
         log.info("headless mode — serving %s until the process is stopped", url)
         while server.should_exit is False and thread.is_alive():
             time.sleep(1.0)

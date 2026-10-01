@@ -25,13 +25,46 @@ const API = (() => {
   // to the bundled offline snapshot.
   const SERVER_STORAGE_KEY = 'techintel_server';
 
+  // Hosted public backend URL — set this after deploying the Cloudflare Worker
+  // (e.g. 'https://techintel-api.<your-subdomain>.workers.dev'). When non-empty:
+  //   * the app offers a one-tap "Use cloud backend" option in the 🌐 dialog, and
+  //   * probe() falls back to it after same-origin, so the Android APK goes live
+  //     from anywhere with zero configuration.
+  // Leave empty until the Worker is actually deployed.
+  const PUBLIC_SERVER = ''; // e.g. 'https://techintel-api.your-subdomain.workers.dev'
+
   const state = {
     mode: 'static',        // 'live' | 'static'
     checked: false,
     baseUrl: '',           // populated in live mode
+    attempted: '',         // server URL the user configured (if probe failed)
     base: {},              // static datasets, loaded once
     evoCache: new Map(),
   };
+
+  /** Wait for `url` to answer GET /api/health. Used by the Server dialog's
+   *  Test button and the Scan-LAN helper. */
+  async function probeServer(rawUrl, timeoutMs = 2500) {
+    const base = String(rawUrl || '').trim().replace(/\/+$/, '');
+    if (!base) return { ok: false, error: 'empty' };
+    const url = /^https?:\/\//i.test(base) ? base : `http://${base}`;
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      const res = await fetch(`${url}/api/health`, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) return { ok: false, status: res.status };
+      const j = await res.json().catch(() => null);
+      // The backend answers `{ "status": "healthy" }` here; accept that and the
+      // conventional `ok` so this probe works against both the desktop/gateway
+      // FastAPI build and the hosted Cloudflare Worker.
+      const s = j && j.status;
+      return { ok: s === 'healthy' || s === 'ok', status: res.status };
+    } catch (err) {
+      const aborted = err && err.name === 'AbortError';
+      return { ok: false, error: aborted ? 'timeout' : 'unreachable' };
+    }
+  }
 
   /** URL of a backend the user explicitly configured, if any (query wins). */
   function configuredServerUrl() {
@@ -122,8 +155,18 @@ const API = (() => {
     // (entered in the 🌐 Server dialog or ?server= deep link), then same-origin.
     const candidates = [];
     const configured = configuredServerUrl();
-    if (configured) candidates.push(configured.replace(/\/+$/, ''));
+    if (configured) {
+      state.attempted = configured.replace(/\/+$/, '');
+      candidates.push(state.attempted);
+    }
     candidates.push(''); // same-origin
+    // Hosted backend last, so local/desktop installs keep preferring their own
+    // backend while the Android APK (which has no same-origin server) gets a
+    // public live source automatically once one is configured.
+    if (PUBLIC_SERVER) {
+      const hosted = PUBLIC_SERVER.trim().replace(/\/+$/, '');
+      if (hosted) candidates.push(hosted);
+    }
 
     for (const base of candidates) {
       try {
@@ -205,9 +248,12 @@ const API = (() => {
     get buildInfo() { return state.base.build; },
     // For the 🌐 Server dialog: the URL the user configured (if any) and the
     // URL live mode actually talks to. `server` is '' when running same-origin
-    // (e.g. desktop EXE), `configured` stays '' when using the snapshot.
+    // (e.g. desktop EXE); `configured`/`attempted` stay '' when using the
+    // bundled snapshot with no explicit server.
     get configured() { return configuredServerUrl(); },
     get server() { return state.baseUrl || ''; },
+    get attempted() { return state.attempted; },
+    testServer: probeServer,
     clearServer() { clearConfiguredServer(); },
 
     async init() {
@@ -377,6 +423,14 @@ const API = (() => {
      */
     get refreshSupported() {
       return api.isLive;
+    },
+
+    /**
+     * The hosted public backend URL baked into this build ('' before deploy).
+     * The UI surfaces a one-tap "Use cloud backend" button when it's set.
+     */
+    get publicServer() {
+      return PUBLIC_SERVER.trim();
     },
 
     async refreshFeed() {
