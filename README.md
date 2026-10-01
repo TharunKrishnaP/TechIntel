@@ -35,8 +35,8 @@ via the 🌐 Server button).
 
 > These links always point at the newest build. The same files are also on the
 > [GitHub Release `v1.0.0`](https://github.com/TharunKrishnaP/TechIntel/releases)
-> ([EXE · 28.3 MB](https://github.com/TharunKrishnaP/TechIntel/releases/download/v1.0.0/TechIntel.exe)
-> / [APK · 4.4 MB](https://github.com/TharunKrishnaP/TechIntel/releases/download/v1.0.0/TechIntel.apk))
+> ([EXE · 25.7 MB](https://github.com/TharunKrishnaP/TechIntel/releases/download/v1.0.0/TechIntel.exe)
+> / [APK · 4.3 MB](https://github.com/TharunKrishnaP/TechIntel/releases/download/v1.0.0/TechIntel.apk))
 > if you prefer the release host.
 
 #### 🍀 First run: what the browser/Windows warnings mean (and exact clicks)
@@ -72,7 +72,7 @@ exact bytes the download buttons serve):
 | File | SHA-256 |
 |---|---|
 | `TechIntel.exe` | `ab62deb61ca247dc5c371dab9bc0e4569225e2825274db7f9eeb0c70b968478f` |
-| `TechIntel.apk` | `ebde71ff835375451ff08600ecf4d0873207138f15cb2ae52db1f9f5dc55fcd9` |
+| `TechIntel.apk` | `fb8029b13c37239a79b4759c0bb45d2ae0a64c08335e70bb8680101264390ee9` |
 
 Check the file you downloaded and confirm it matches:
 
